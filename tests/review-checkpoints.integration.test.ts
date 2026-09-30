@@ -9,7 +9,7 @@ import {
   it,
   vi,
 } from "vitest";
-import { db } from "../src/lib/db";
+import { db, transaction } from "../src/lib/db";
 import {
   billingAccount,
   saveReviewResult,
@@ -181,11 +181,11 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
       expect(
         (
           await db().query(
-            "SELECT sum(reuse_count)::int AS n FROM review_checkpoints WHERE run_id=$1",
+            "SELECT count(*)::int AS n FROM review_checkpoints WHERE run_id=$1",
             [run.id],
           )
         ).rows[0].n,
-      ).toBe(1);
+      ).toBe(0);
       expect(
         (
           await db().query("SELECT * FROM billing_charges WHERE run_id=$1", [
@@ -193,6 +193,79 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
           ])
         ).rowCount,
       ).toBe(1);
+    });
+    it("removes checkpoints when the final result is saved with billing disabled", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () => answer()),
+      );
+      await execute();
+      const reviewed = await execute({ settle: true });
+      expect(reviewed.resumedBatches).toBe(2);
+      expect(
+        (
+          await db().query("SELECT 1 FROM review_checkpoints WHERE run_id=$1", [
+            run.id,
+          ])
+        ).rowCount,
+      ).toBe(0);
+      // A publication failure can still retry using the durable final result.
+      await db().query(
+        "UPDATE runs SET status='failed',publication_started=true WHERE id=$1",
+        [run.id],
+      );
+      const saved = (
+        await db().query("SELECT result FROM runs WHERE id=$1", [run.id])
+      ).rows[0].result;
+      expect(saved.summary).toBe(reviewed.summary);
+      expect(saved.resumedBatches).toBe(2);
+    });
+    it("keeps checkpoints on rollback or retryable failure and removes them on completion", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () => answer()),
+      );
+      await execute();
+      await expect(
+        transaction(async (c) => {
+          await c.query("UPDATE runs SET result='{}'::jsonb WHERE id=$1", [
+            run.id,
+          ]);
+          expect(
+            (
+              await c.query(
+                "SELECT 1 FROM review_checkpoints WHERE run_id=$1",
+                [run.id],
+              )
+            ).rowCount,
+          ).toBe(0);
+          throw new Error("Simulated result transaction failure");
+        }),
+      ).rejects.toThrow("Simulated result transaction failure");
+      for (const status of ["failed", "cancelled", "queued", "running"]) {
+        await db().query("UPDATE runs SET status=$2 WHERE id=$1", [
+          run.id,
+          status,
+        ]);
+        expect(
+          (
+            await db().query(
+              "SELECT 1 FROM review_checkpoints WHERE run_id=$1",
+              [run.id],
+            )
+          ).rowCount,
+        ).toBe(2);
+      }
+      await db().query("UPDATE runs SET status='completed' WHERE id=$1", [
+        run.id,
+      ]);
+      expect(
+        (
+          await db().query("SELECT 1 FROM review_checkpoints WHERE run_id=$1", [
+            run.id,
+          ])
+        ).rowCount,
+      ).toBe(0);
     });
     it("invalidates reuse when instructions, phase, model or revision change", async () => {
       const fetcher = vi.fn(async () => answer());
