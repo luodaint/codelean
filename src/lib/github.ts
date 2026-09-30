@@ -14,6 +14,20 @@ function appJwt() {
   ).toString();
   return `${body}.${createSign("RSA-SHA256").update(body).sign(key).toString("base64url")}`;
 }
+export class GitHubAPIError extends Error {
+  constructor(public status: number) {
+    super(`GitHub API returned ${status}`);
+  }
+}
+export class OrganizationAccessError extends Error {
+  constructor(public reason: "organization-permission" | "organization-owner") {
+    super(
+      reason === "organization-permission"
+        ? "GitHub organization membership access requires Members read permission"
+        : "A GitHub organization owner must connect this installation",
+    );
+  }
+}
 export class GitHub {
   constructor(private token: string) {}
   async request<T>(path: string, method = "GET", body?: unknown): Promise<T> {
@@ -31,7 +45,7 @@ export class GitHub {
       signal: AbortSignal.timeout(30_000),
       cache: "no-store",
     });
-    if (!response.ok) throw new Error(`GitHub API returned ${response.status}`);
+    if (!response.ok) throw new GitHubAPIError(response.status);
     if (response.status === 204) return undefined as T;
     return response.json() as Promise<T>;
   }
@@ -106,23 +120,30 @@ export async function authorizeInstallation(
         "Only the GitHub account owner can connect this installation",
       );
   } else if (installation.account.type === "Organization") {
-    // Listing the authenticated user's memberships requires no extra App permission.
-    const memberships = await gh.pages<{
+    // The list endpoint can silently omit memberships. Query the selected org
+    // explicitly, so missing Members:read approval produces an actionable error.
+    let membership: {
       state: string;
       role: string;
       organization: { id: number };
-    }>("/user/memberships/orgs?state=active");
-    if (
-      !memberships.some(
-        (m) =>
-          m.state === "active" &&
-          m.role === "admin" &&
-          m.organization.id === installation.account.id,
-      )
-    )
-      throw new Error(
-        "A GitHub organization owner must connect this installation",
+    };
+    try {
+      membership = await gh.request(
+        `/user/memberships/orgs/${encodeURIComponent(installation.account.login)}`,
       );
+    } catch (error) {
+      if (error instanceof GitHubAPIError && error.status === 403)
+        throw new OrganizationAccessError("organization-permission");
+      if (error instanceof GitHubAPIError && error.status === 404)
+        throw new OrganizationAccessError("organization-owner");
+      throw error;
+    }
+    if (
+      membership.state !== "active" ||
+      membership.role !== "admin" ||
+      membership.organization.id !== installation.account.id
+    )
+      throw new OrganizationAccessError("organization-owner");
   } else throw new Error("Unsupported GitHub account type");
   return installation;
 }

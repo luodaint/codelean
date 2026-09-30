@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { auth, requireMutation, requireWorkspace } from "@/lib/auth";
 import { db, transaction } from "@/lib/db";
-import { syncRepositories } from "@/lib/github";
+import { syncRepositories, OrganizationAccessError } from "@/lib/github";
 import { userGitHub } from "@/lib/github-user";
 
 export async function logout() {
@@ -35,8 +35,10 @@ export async function sync(form: FormData) {
       session.user.githubId || "",
       await userGitHub(),
     );
-  } catch {
-    redirect("/repositories?error=sync");
+  } catch (error) {
+    redirect(
+      `/repositories?error=${error instanceof OrganizationAccessError ? error.reason : "sync"}`,
+    );
   }
   revalidatePath("/", "layout");
   redirect("/repositories?synced=1");

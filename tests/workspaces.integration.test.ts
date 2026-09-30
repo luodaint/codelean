@@ -295,16 +295,19 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
     });
     const userGh = (type = "User", ownerId = 42, role = "admin") =>
       ({
-        request: async () => ({
-          installations: [
-            {
-              id: installation,
-              app_id: 9876,
-              suspended_at: null,
-              account: { id: ownerId, login: "account", type },
-            },
-          ],
-        }),
+        request: async (path: string) =>
+          path.startsWith("/user/memberships/orgs/")
+            ? { state: "active", role, organization: { id: ownerId } }
+            : {
+                installations: [
+                  {
+                    id: installation,
+                    app_id: 9876,
+                    suspended_at: null,
+                    account: { id: ownerId, login: "account", type },
+                  },
+                ],
+              },
         pages: async () => [
           { state: "active", role, organization: { id: ownerId } },
         ],

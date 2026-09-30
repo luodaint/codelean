@@ -85,7 +85,7 @@ If GitHub reports an email/authorization error, verify the App's **Email address
 
 1. Sign in with GitHub and create a workspace; you become its owner. Use the sidebar workspace link to switch companies or create another workspace.
 2. In **Repositories**, install the same GitHub App, select its installation, sync, and enable the desired repositories. For other customers, the GitHub App must allow **Any account** to install it.
-3. Connecting a personal installation requires its GitHub account owner. Connecting an organization installation requires an active GitHub organization owner, plus owner/admin access in Codelean. Each installation belongs to exactly one workspace.
+3. Connecting a personal installation requires its GitHub account owner. Connecting an organization installation requires an active GitHub organization owner, plus owner/admin access in Codelean. Each installation belongs to exactly one workspace. Organization connections require the App’s **Organization permissions → Members: Read-only** permission; existing installations must approve updates to this permission.
 4. In **Settings**, invite a teammate using their verified sign-in email. They see the invitation on **Workspaces** after login. Invitations are currently in-app; no invitation email is sent. Owners/admins manage repositories, retries, and members; members can view reviews and statistics.
 
 One person can belong to several companies. The initial limits are 10 workspace creations per user and 100 members per workspace. GitHub-connected identity is required to create a workspace in production; local numeric login can create them for testing. Optional email-code login lets invited teammates join, but cannot connect a GitHub installation until they sign in with GitHub.

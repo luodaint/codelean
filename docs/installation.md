@@ -72,6 +72,7 @@ Create a dedicated GitHub App for this Codelean instance under your account or o
 - Homepage/setup URL: your app origin (setup can point to `/repositories`). Add user authorization **Callback URL** `https://YOUR_HOST/api/auth/callback/github`. Leave **Request user authorization (OAuth) during installation** unchecked; sign in through Codelean first.
 - Webhook URL: `https://YOUR_HOST/api/webhooks/github`; active, with the configured webhook secret.
 - Repository permissions: **Contents: Read**, **Pull requests: Read and write**, **Checks: Read and write**. Add **Issues: Read and write** if labels will be enabled. Metadata read access is inherent.
+- Organization permissions: **Members: Read-only**, to verify that the connecting user owns the organization. Existing organization installations must approve this permission update before syncing.
 - Account permissions: **Email addresses: Read-only**, for verified sign-in identity. Set `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` from this same App.
 - Subscribe to **Pull request** events. Installation and repository installation changes are also handled.
 - Install on selected test repositories. Put the app ID, slug and private key in configuration and redeploy.

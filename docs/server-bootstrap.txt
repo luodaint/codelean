@@ -176,7 +176,9 @@ Use compose.yml plus compose.dokploy.yml, or Dokploy domain routing as documente
 Set APP_URL/APP_DOMAIN, SIGNUP_MODE=open, GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET,
 all generated/application secrets, and optional SMTP for email-code fallback.
 Set the App callback to https://YOUR_HOST/api/auth/callback/github and account
-permission Email addresses: Read-only. Sign-in does not grant repository access.
+permission Email addresses: Read-only. Set Organization permissions -> Members:
+Read-only so Codelean can verify organization ownership; existing installations
+must approve that permission update. Sign-in does not grant repository access.
 Production Compose forces DEV_AUTH_BYPASS=false; never enable the development
 numeric-code bypass on the server. Only local next dev may use that option.
 The migration service applies Better Auth then SQL migrations before web/worker.

@@ -54,9 +54,28 @@ export default async function Repositories({
       )}
       {params.error && (
         <div role="alert" className="notice danger">
-          Could not connect this installation. You must own the GitHub account
-          or organization and manage this workspace. An installation can belong
-          to only one workspace. Check the App credentials and try again.
+          {params.error === "organization-permission" ? (
+            <>
+              GitHub could not verify your organization role. The App needs
+              Organization permissions → Members: Read-only, and the
+              organization owner must approve the updated installation
+              permissions. Also check any organization access restrictions, then
+              retry.
+            </>
+          ) : params.error === "organization-owner" ? (
+            <>
+              An active GitHub organization owner must connect this
+              installation. Ask an owner to sign in and sync it from this
+              workspace.
+            </>
+          ) : (
+            <>
+              Could not connect this installation. You must own the GitHub
+              account or organization and manage this workspace. An installation
+              can belong to only one workspace. Check the App credentials and
+              try again.
+            </>
+          )}
         </div>
       )}
       {githubError && (
