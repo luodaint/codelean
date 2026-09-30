@@ -1,8 +1,11 @@
 # Review skills
 
 Edit this folder to tune Codelean's **code review and separate PR security audit**.
-The security audit runs after Gitleaks, Semgrep, and normal AI review. Enabled skills
-are loaded from this deployed copy of Codelean, never from the PR being reviewed.
+Gitleaks and Semgrep run first. Ordinary AI review and security discovery then
+share the agent pool and can run concurrently. Security verification follows
+discovery when there are candidates; publication waits for both review phases.
+Enabled skills are loaded by the worker from this deployed copy of Codelean, never
+from the PR being reviewed.
 
 Both skills are **suggestion-only**. Actionable findings are posted on their added
 code lines as GitHub `COMMENT` reviews (up to five inline comments per run). The
@@ -51,7 +54,9 @@ agents. `simplify/UPSTREAM.md` records the inspected revision and provenance.
    authorization controls considered. Do not infer a missing guard in unseen code.
    ```
 
-3. Add an entry to `review-skills/skills.json`:
+3. Append the following object as a new entry inside the existing top-level JSON
+   array in `review-skills/skills.json`. Keep the existing entries; this snippet is
+   one array element, not a replacement for the whole manifest:
 
    ```json
    {
@@ -79,12 +84,30 @@ content per phase. Missing, malformed, oversized, or escaping files fail the run
 not silently ignored. Only Markdown is read. Scripts are never executed. Keep
 credentials out of skill files: enabled text is sent to your NaN model.
 
+## Tune output length
+
+The shared writing contract in `src/lib/review.ts` (`systemPrompt`) applies to
+ordinary review, security discovery, and verification. It asks for a 1-2 sentence
+summary, a short problem title, a description covering trigger and impact, exact
+source evidence, and a specific fix. Descriptions target 60 words and fixes 40;
+these are flexible writing targets, not truncation or validation limits. Complex
+findings should keep essential prerequisites, evidence, safeguards, and test advice.
+Verification retains candidate fields unchanged and summarizes common rejection
+reasons without a candidate-by-candidate narrative.
+
+The same saved finding text appears in the app and GitHub inline comments. This
+policy reduces repetition in future runs without lowering the reasoning token
+budget, removing findings, or rewriting existing reports. Tune the shared contract
+for all agents, or the adapters here for skill-specific guidance.
+
 ## Apply changes and inspect results
 
 Local workers read skills anew for each analysis; no restart is needed for a
 Markdown/manifest-only edit. Restart `npm run worker` after changing worker code.
 For Docker/Dokploy, rebuild and redeploy the worker image because it copies this
-folder at build time. No extra environment variable or database migration is needed.
+folder at build time. The web service displays saved run results and does not read
+skill files, so it does not need this folder in its runtime image. No extra
+environment variable or database migration is needed.
 
 Push a new commit or open a PR to trigger a fresh run. Completed runs are immutable;
 publication retries reuse their saved analysis rather than rerunning new skills.
@@ -137,8 +160,8 @@ Skills are frozen once per phase; candidate verification only visits batches wit
 are not analyzed together, so multi-batch runs explicitly report partial coverage.
 Token totals combine all successful batch calls; failed attempts are not included.
 
-Set `NAN_FALLBACK_MODEL=glm5.3-flash` to enable an optional fallback for NaN's
-reasoning-only cutoff. The primary `NAN_MODEL` remains unchanged. Only an explicit
+Set `NAN_FALLBACK_MODEL=glm5.3-flash` on the worker to enable an optional fallback
+for NaN's reasoning-only cutoff. The primary `NAN_MODEL` remains unchanged. Only an explicit
 provider cutoff triggers this fallback; the fallback receives the same source,
 skill instructions, and validation, with `reasoning_effort: medium`. It shares the
 agent slot and deadline, gets at most one format correction, and cannot recursively
