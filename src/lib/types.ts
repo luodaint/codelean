@@ -60,4 +60,5 @@ export type ReviewResult = {
   scanners: string[];
   warnings: string[];
   securityAudit?: SecurityAuditResult;
+  reviewSkills?: { id: string; name: string; sha256: string }[];
 };

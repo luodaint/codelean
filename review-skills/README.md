@@ -1,7 +1,7 @@
 # Review skills
 
-Edit this folder to tune Codelean's **separate PR security audit**. It runs after
-Gitleaks, Semgrep, and the normal AI correctness/security review. Enabled skills
+Edit this folder to tune Codelean's **code review and separate PR security audit**.
+The security audit runs after Gitleaks, Semgrep, and normal AI review. Enabled skills
 are loaded from this deployed copy of Codelean, never from the PR being reviewed.
 
 ## Included Cloudflare skill
@@ -24,6 +24,14 @@ use `NAN_MODEL` and the NaN credentials used by the ordinary review. This adds o
 model call per run, plus one when there are candidates, and increases latency and
 provider usage. Source-only verification can still miss or misclassify issues.
 
+## Included Simplify skill
+
+`simplify/SKILL.md` is an independently written adapter for the user-requested
+[opencode-simplify skill](https://github.com/AbdoKnbGit/opencode-simplify/tree/main/simplify).
+It adds reuse, clarity, and efficiency criteria to the ordinary code-review call.
+It uses the supplied snapshots, suggests changes, and does not edit code or spawn
+agents. `simplify/UPSTREAM.md` records the inspected revision and provenance.
+
 ## Add your own skill
 
 1. Create `review-skills/my-security-rules/SKILL.md`.
@@ -44,22 +52,24 @@ provider usage. Source-only verification can still miss or misclassify issues.
      "id": "my-security-rules",
      "name": "Tenant security",
      "enabled": true,
+     "phase": "security-audit",
      "files": ["SKILL.md"]
    }
    ```
 
    The manifest is an array. `id` is the folder name. `files` lists Markdown paths
    inside that folder in prompt order. References and links are not followed; add
-   companion Markdown files explicitly. All enabled entries are combined into the
-   security discovery/verification prompts, not separate agents per skill.
+   companion Markdown files explicitly. `phase` selects `review` (ordinary AI
+   review) or `security-audit` (discovery and verification). Enabled entries are
+   combined within their phase, not run as separate agents per skill.
 
 4. Edit the existing adapter if you only want to tune the Cloudflare checks.
-   Set an entry's `enabled` to `false` to disable it. If all entries are disabled,
+   Set an entry's `enabled` to `false` to disable it. If all security entries are disabled,
    the report explicitly says the security audit is disabled; normal review and
    static scanners still run.
 
 Limits: 10 entries, 8 files per entry, 32 KB per file, and 64 KB combined enabled
-content. Missing, malformed, oversized, or escaping files fail the run; they are
+content per phase. Missing, malformed, oversized, or escaping files fail the run; they are
 not silently ignored. Only Markdown is read. Scripts are never executed. Keep
 credentials out of skill files: enabled text is sent to your NaN model.
 
@@ -79,6 +89,12 @@ summary includes the security pass, and its findings participate in advisory inl
 comments and existing labels. Token totals include ordinary review and both security
 calls. A model or skill-loading failure leaves the run incomplete and uses the normal
 retry flow. Older runs show that no separate security audit was recorded.
+
+The ordinary review also records its skill versions. `src/lib/config.ts` controls
+`modelOutputTokens` (32,768) and `modelTimeoutMs` (360,000). The output budget includes
+reasoning, not just the final answer. DeepSeek requests use JSON object mode. A
+truncated answer is rejected and produces a specific error; it never counts as a
+clean review. See [NaN's model contract](https://nan.builders/docs/models).
 
 Changes here apply to all workspaces served by this deployment. Per-workspace or
 per-repository skill selection is not implemented. A PR editing this folder is

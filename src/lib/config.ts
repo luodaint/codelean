@@ -19,6 +19,8 @@ export const limits = {
   totalBytes: 500_000,
   findings: 20,
   comments: 5,
+  modelOutputTokens: 32_768,
+  modelTimeoutMs: 360_000,
 };
 
 export function githubLoginConfigured() {

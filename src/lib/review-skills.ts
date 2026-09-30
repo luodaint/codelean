@@ -13,6 +13,7 @@ const manifestSchema = z
           .max(80),
         name: z.string().min(1).max(120),
         enabled: z.boolean(),
+        phase: z.enum(["review", "security-audit"]),
         files: z.array(z.string().min(1).max(200)).min(1).max(8),
       })
       .strict(),
@@ -25,6 +26,7 @@ export type LoadedSkills = { instructions: string; versions: SkillVersion[] };
 // Read only deployment-owned files. Never discover skills from PR content or
 // accept repository-controlled paths. The root argument is for isolated tests.
 export async function loadReviewSkills(
+  phase: "review" | "security-audit",
   root = resolve(process.cwd(), "review-skills"),
 ): Promise<LoadedSkills> {
   const directory = await realpath(root);
@@ -49,7 +51,7 @@ export async function loadReviewSkills(
     throw new Error("Duplicate review skill id");
   const versions: SkillVersion[] = [];
   const prompts: string[] = [];
-  for (const skill of manifest.filter((s) => s.enabled)) {
+  for (const skill of manifest.filter((s) => s.enabled && s.phase === phase)) {
     const parts: string[] = [];
     for (const file of skill.files) {
       if (

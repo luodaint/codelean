@@ -21,7 +21,7 @@ export async function securityAudit(
   findings: Finding[];
   warnings: string[];
 }> {
-  const skills = await loadReviewSkills();
+  const skills = await loadReviewSkills("security-audit");
   if (!skills.versions.length) {
     return {
       audit: {

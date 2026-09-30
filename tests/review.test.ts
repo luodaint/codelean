@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   addedLines,
   modelReview,
+  ModelReviewError,
   outputSchema,
   systemPrompt,
   validateFindings,
@@ -101,7 +102,10 @@ describe("review validation", () => {
       [],
     );
     const body = JSON.parse(fetcher.mock.calls[0][1].body);
-    expect(body.messages[0].content).toBe(systemPrompt);
+    expect(body.messages[0].content).toContain(systemPrompt);
+    expect(body.messages[0].content).toContain(
+      "Simplify — Codelean review adapter",
+    );
     expect(body.messages[0].content).not.toContain("IGNORE PREVIOUS");
     expect(body.messages[1].content).toContain("IGNORE PREVIOUS");
     expect(body.tools).toBeUndefined();
@@ -118,6 +122,49 @@ describe("review validation", () => {
         ),
     );
     await expect(modelReview(files, [])).rejects.toThrow("invalid JSON");
+  });
+  it("requests JSON mode for DeepSeek and identifies exhausted reasoning budgets", async () => {
+    vi.stubEnv("NAN_API_KEY", "test-key");
+    vi.stubEnv("NAN_MODEL", "deepseek-v4-flash");
+    const fetcher = vi.fn().mockResolvedValue(
+      Response.json({
+        choices: [{ finish_reason: "length", message: { content: "" } }],
+        usage: { completion_tokens: 16384 },
+      }),
+    );
+    vi.stubGlobal("fetch", fetcher);
+    await expect(modelReview(files, [])).rejects.toThrow(
+      "exhausted its output budget",
+    );
+    const body = JSON.parse(fetcher.mock.calls[0][1].body);
+    expect(body.response_format).toEqual({ type: "json_object" });
+    expect(body.max_tokens).toBe(32768);
+  });
+  it("exposes only a safe message when model output fails schema validation", async () => {
+    vi.stubEnv("NAN_API_KEY", "test-key");
+    vi.stubEnv("NAN_MODEL", "test-model");
+    const fetcher = vi.fn().mockResolvedValue(
+      Response.json({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                summary: "provider-private-data",
+                findings: [],
+                secret: "do-not-display",
+              }),
+            },
+          },
+        ],
+      }),
+    );
+    vi.stubGlobal("fetch", fetcher);
+    const review = modelReview(files, []);
+    await expect(review).rejects.toBeInstanceOf(ModelReviewError);
+    await expect(review).rejects.toThrow("review schema");
+    expect(
+      JSON.parse(fetcher.mock.calls[0][1].body).response_format,
+    ).toBeUndefined();
   });
   it("does not turn scanner outages into empty clean results", async () => {
     vi.stubEnv("SCANNER_URL", "http://scanner:8080");

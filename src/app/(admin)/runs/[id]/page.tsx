@@ -78,6 +78,12 @@ export default async function RunPage({
                 <span>{run.tokens.toLocaleString()} tokens</span>
                 <span>{run.model}</span>
               </div>
+              {run.result.reviewSkills?.map((skill) => (
+                <p key={skill.id}>
+                  {skill.name} · skill version{" "}
+                  <code title={skill.sha256}>{skill.sha256.slice(0, 12)}</code>
+                </p>
+              ))}
             </div>
           </section>
           {run.result.securityAudit ? (

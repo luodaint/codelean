@@ -264,6 +264,9 @@ export async function reportFailure(
 function summaryBody(run: Run, result: ReviewResult) {
   return (
     `<!-- codelean:summary -->\n## Codelean review\n\n${md(result.summary)}\n\n` +
+    (result.reviewSkills?.length
+      ? `Code review skills: ${result.reviewSkills.map((s) => md(s.name)).join(", ")}.\n\n`
+      : "") +
     (result.securityAudit
       ? `### PR security audit\n\n${md(result.securityAudit.summary)}\n\nStatus: **${result.securityAudit.status}**. Skills: ${result.securityAudit.skills.map((s) => md(s.name)).join(", ") || "none"}. ${result.securityAudit.retained} retained findings. Changed-file source review only; no runtime verification or repository-wide audit.\n\n`
       : "") +
@@ -468,6 +471,7 @@ export async function processRun(run: Run) {
         ...security.findings,
       ] as Finding[],
       securityAudit: security.audit,
+      reviewSkills: model.skills,
       files: source.files.length,
       skipped: source.skipped,
       coverage:
