@@ -1209,3 +1209,41 @@ footer {
     transition: none !important;
   }
 }
+
+.github-button {
+  width: 100%;
+  background: #192d43;
+}
+.github-login {
+  margin: 26px 0 18px;
+}
+.email-fallback {
+  border-top: 1px solid var(--line);
+  padding-top: 18px;
+}
+.email-fallback summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 13px;
+  margin-bottom: 18px;
+}
+.signed-in-user {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.signed-in-label {
+  text-align: right;
+  font-size: 12px;
+}
+.signed-in-label small {
+  display: block;
+  color: var(--muted);
+  margin-top: 3px;
+}
+.admin-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}

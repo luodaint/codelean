@@ -1,8 +1,8 @@
 import pg from "pg";
 import { required } from "./config";
-const globalDb = globalThis as unknown as { luodaPool?: pg.Pool };
+const globalDb = globalThis as unknown as { codeleanPool?: pg.Pool };
 export function db() {
-  return (globalDb.luodaPool ??= new pg.Pool({
+  return (globalDb.codeleanPool ??= new pg.Pool({
     connectionString: required("DATABASE_URL"),
     max: 8,
     connectionTimeoutMillis: 5000,

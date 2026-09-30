@@ -22,7 +22,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
       vi.stubEnv("SMTP_HOST", "smtp.example.test");
       vi.stubEnv("SMTP_USER", "test");
       vi.stubEnv("SMTP_PASSWORD", "test");
-      vi.stubEnv("EMAIL_FROM", "Luoda <test@example.test>");
+      vi.stubEnv("EMAIL_FROM", "Codelean <test@example.test>");
     });
     afterAll(async () => {
       await db().query('DELETE FROM "user" WHERE email IN ($1,$2)', [

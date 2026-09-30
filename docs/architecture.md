@@ -22,7 +22,7 @@ A single worker holds a PostgreSQL advisory session lock. Jobs are transactional
 5. Send snapshots to the private scanner. Gitleaks scans for secrets and redacts detected values from source and patches before any model call. Worker redaction adds common token/key patterns. Detection is best effort; enabling a repository authorizes sending its bounded, redacted code to the configured provider.
 6. Run pinned Semgrep with bundled rules: JavaScript eval, disabled JavaScript TLS verification, Python eval/exec, and Python subprocess shell use. Repository scanner configs and ignore files cannot weaken these commands. This is deliberately small rule coverage, not a comprehensive audit.
 7. Request structured review JSON from the configured NaN model. Repository text is untrusted input; the model has no tools or shell access. Validate fields, paths, added-line locations and quoted evidence, redact output, and deduplicate findings. Invalid output fails the run.
-8. Recheck current revision and repository authorization before each publication stage. Update an advisory neutral check, one bot-owned summary comment, at most five inline AI comments, and optional `luoda:*` labels. Findings remain available in the dashboard.
+8. Recheck current revision and repository authorization before each publication stage. Update an advisory neutral check, one bot-owned summary comment, at most five inline AI comments, and optional `codelean:*` labels. Findings remain available in the dashboard.
 
 A push can still race with an individual GitHub API call; the checks and review are explicitly tied to a commit. No approval or merge decision is made. Summary comments identify the reviewed SHA. No promise of exactly-once delivery is made across external systems; stable markers, stored IDs and reconciliation reduce duplicates.
 
@@ -34,7 +34,9 @@ Parsers still process attacker-controlled source. On the shared Dokploy server, 
 
 ## Authentication
 
-Better Auth owns OTP verification and database sessions. Codes are six digits, hashed at rest, valid five minutes and limited to five attempts; HTTP rate limits are database-backed. Only configured admin emails can request/sign in with a code. SMTP requires TLS. Session lifetime is 12 hours, and the email allowlist is checked at each admin data/mutation boundary.
+Better Auth owns GitHub OAuth (state, PKCE, token exchange), OTP verification and database sessions. The same GitHub App provides the client ID/secret for sign-in and installation credentials for reviews. The authenticated GitHub email API must return an allowlisted verified email; public profile email alone does not authorize access. Profile name, username, stable GitHub ID and avatar are stored, and OAuth tokens are encrypted using Better Auth. Verified email-code users can link the matching GitHub identity. Client requests cannot set GitHub identity fields. GitHub authorization is separate from App installation and does not add customer isolation.
+
+SMTP is optional for the email-code fallback. Codes are six digits, hashed at rest, valid five minutes and limited to five attempts; HTTP rate limits are database-backed. Only configured admin emails can request/sign in with a code. SMTP requires TLS. Session lifetime is 12 hours, and the email allowlist is checked at each admin data/mutation boundary.
 
 `DEV_AUTH_BYPASS=true` maps numeric input to a deterministic development OTP only when `NODE_ENV=development` and `APP_URL` is loopback. A code request is still required, and consumed codes cannot be reused. Production rejects the bypass configuration; Compose explicitly sets it false.
 

@@ -7,7 +7,7 @@ export function Brand() {
     <span className="brand">
       <ShieldCheck size={28} strokeWidth={1.7} />
       <span>
-        luoda<span className="brand-sub">PR checker</span>
+        codelean<span className="brand-sub">PR checker</span>
       </span>
     </span>
   );
@@ -15,18 +15,24 @@ export function Brand() {
 export function Shell({
   children,
   email,
+  name,
+  githubUsername,
+  image,
 }: {
   children: React.ReactNode;
   email: string;
+  name?: string;
+  githubUsername?: string | null;
+  image?: string | null;
 }) {
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <Link href="/" aria-label="Luoda home">
+        <Link href="/" aria-label="Codelean home">
           <Brand />
         </Link>
         <div className="workspace">
-          <span className="workspace-avatar">L</span>
+          <span className="workspace-avatar">C</span>
           <div>
             My workspace<small>Self-hosted instance</small>
           </div>
@@ -53,7 +59,7 @@ export function Shell({
               <LogOut size={16} /> Sign out
             </button>
           </form>
-          <span className="version">Luoda PR Checker · v0.1.0</span>
+          <span className="version">Codelean · v0.1.0</span>
         </div>
       </aside>
       <div className="main-column">
@@ -61,13 +67,25 @@ export function Shell({
           <span>
             Engineering / <strong>Code review</strong>
           </span>
-          <span
-            className="admin-avatar"
-            title={`Signed in as ${email}`}
-            aria-label={`Signed in as ${email}`}
-          >
-            {email[0].toUpperCase()}
-          </span>
+          <div className="signed-in-user">
+            {githubUsername && (
+              <span className="signed-in-label">
+                {name}
+                <small>@{githubUsername}</small>
+              </span>
+            )}
+            <span
+              className="admin-avatar"
+              title={`Signed in as ${email}`}
+              aria-label={`Signed in as ${email}`}
+            >
+              {githubUsername && image ? (
+                <img src={image} alt="" referrerPolicy="no-referrer" />
+              ) : (
+                email[0].toUpperCase()
+              )}
+            </span>
+          </div>
         </header>
         <main>{children}</main>
         <footer>

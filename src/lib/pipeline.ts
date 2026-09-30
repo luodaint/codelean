@@ -194,19 +194,26 @@ function md(value: string) {
     .replace(/@/g, "@\u200b")
     .replace(/[\\`*_{}\[\]()<>#+!|]/g, "\\$&");
 }
+async function existingCheck(run: Run, base: string, gh: GitHub) {
+  // Reconcile runs started before the rename as well as current checks.
+  for (const name of ["Codelean review", "Luoda review"]) {
+    const checks = await gh.request<{
+      check_runs: { id: number; external_id: string }[];
+    }>(
+      `${base}/commits/${run.head_sha}/check-runs?check_name=${encodeURIComponent(name)}&per_page=100`,
+    );
+    const check = checks.check_runs.find((c) => c.external_id === run.id);
+    if (check) return check;
+  }
+}
 export async function beginCheck(run: Run, repo: Repository, gh: GitHub) {
   const base = repoPath(repo.full_name);
-  const checks = await gh.request<{
-    check_runs: { id: number; external_id: string }[];
-  }>(
-    `${base}/commits/${run.head_sha}/check-runs?check_name=Luoda%20review&per_page=100`,
-  );
-  const existing = checks.check_runs.find((c) => c.external_id === run.id);
+  const existing = await existingCheck(run, base, gh);
   const check = await gh.request<{ id: number }>(
     existing ? `${base}/check-runs/${existing.id}` : `${base}/check-runs`,
     existing ? "PATCH" : "POST",
     {
-      name: "Luoda review",
+      name: "Codelean review",
       head_sha: run.head_sha,
       external_id: run.id,
       status: "in_progress",
@@ -248,14 +255,14 @@ export async function reportFailure(
             : "Review incomplete",
         summary: cancelled
           ? "The PR revision or repository settings changed."
-          : "Analysis or publication did not finish. Check the run in Luoda; this is not a clean review.",
+          : "Analysis or publication did not finish. Check the run in Codelean; this is not a clean review.",
       },
     },
   );
 }
 function summaryBody(run: Run, result: ReviewResult) {
   return (
-    `<!-- luoda-pr-checker:summary -->\n## Luoda review\n\n${md(result.summary)}\n\n` +
+    `<!-- codelean:summary -->\n## Codelean review\n\n${md(result.summary)}\n\n` +
     `Reviewed commit \`${run.head_sha.slice(0, 12)}\` against \`${run.base_sha.slice(0, 12)}\`. ` +
     `${result.files} changed files analyzed. Coverage: **${result.coverage}**. This review is advisory.\n\n` +
     result.findings
@@ -282,15 +289,10 @@ export async function publish(
     run.id,
   ]);
   const base = repoPath(repo.full_name);
-  const marker = `<!-- luoda-pr-checker:run:${run.id} -->`;
-  const checks = await gh.request<{
-    check_runs: { id: number; external_id: string }[];
-  }>(
-    `${base}/commits/${run.head_sha}/check-runs?check_name=Luoda%20review&per_page=100`,
-  );
-  const check = checks.check_runs.find((c) => c.external_id === run.id);
+  const marker = `<!-- codelean:run:${run.id} -->`;
+  const check = await existingCheck(run, base, gh);
   const checkBody = {
-    name: "Luoda review",
+    name: "Codelean review",
     head_sha: run.head_sha,
     external_id: run.id,
     status: "completed",
@@ -319,7 +321,9 @@ export async function publish(
   const old = comments.find(
     (c) =>
       c.performed_via_github_app?.id === Number(required("GITHUB_APP_ID")) &&
-      c.body.includes("<!-- luoda-pr-checker:summary -->"),
+      ["<!-- codelean:summary -->", "<!-- luoda-pr-checker:summary -->"].some(
+        (marker) => c.body.includes(marker),
+      ),
   );
   const summary = await gh.request<{ id: number }>(
     old
@@ -345,7 +349,9 @@ export async function publish(
     let review = reviews.find(
       (r) =>
         r.user.login === `${required("GITHUB_APP_SLUG")}[bot]` &&
-        r.body.includes(marker),
+        [marker, `<!-- luoda-pr-checker:run:${run.id} -->`].some((marker) =>
+          r.body.includes(marker),
+        ),
     );
     if (!review)
       review = await gh.request(
@@ -372,16 +378,16 @@ export async function publish(
     await current(run, gh, repo);
     const label =
       result.coverage === "partial"
-        ? "luoda:partial"
+        ? "codelean:partial"
         : result.findings.length
-          ? "luoda:findings"
-          : "luoda:reviewed";
+          ? "codelean:findings"
+          : "codelean:reviewed";
     const existing = await gh.pages<{ name: string }>(`${base}/labels`);
     if (!existing.some((l) => l.name === label))
       await gh.request(`${base}/labels`, "POST", {
         name: label,
-        color: label === "luoda:reviewed" ? "2f7665" : "bf7b2c",
-        description: "Advisory Luoda review status",
+        color: label === "codelean:reviewed" ? "2f7665" : "bf7b2c",
+        description: "Advisory Codelean review status",
       });
     await gh.request(`${base}/issues/${run.pr_number}/labels`, "POST", {
       labels: [label],
@@ -391,9 +397,14 @@ export async function publish(
     );
     for (const oldLabel of currentLabels.filter(
       (l) =>
-        ["luoda:partial", "luoda:findings", "luoda:reviewed"].includes(
-          l.name,
-        ) && l.name !== label,
+        [
+          "codelean:partial",
+          "codelean:findings",
+          "codelean:reviewed",
+          "luoda:partial",
+          "luoda:findings",
+          "luoda:reviewed",
+        ].includes(l.name) && l.name !== label,
     ))
       await gh.request(
         `${base}/issues/${run.pr_number}/labels/${encodeURIComponent(oldLabel.name)}`,

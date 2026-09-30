@@ -11,16 +11,16 @@ jobs:
       postgres:
         image: postgres:17-alpine
         env:
-          POSTGRES_USER: luoda
+          POSTGRES_USER: codelean
           POSTGRES_PASSWORD: ci-test-password
-          POSTGRES_DB: luoda
+          POSTGRES_DB: codelean
         ports: ["5432:5432"]
         options: >-
-          --health-cmd "pg_isready -U luoda -d luoda"
+          --health-cmd "pg_isready -U codelean -d codelean"
           --health-interval 5s --health-timeout 5s --health-retries 10
     env:
-      DATABASE_URL: postgresql://luoda:ci-test-password@localhost:5432/luoda
-      TEST_DATABASE_URL: postgresql://luoda:ci-test-password@localhost:5432/luoda
+      DATABASE_URL: postgresql://codelean:ci-test-password@localhost:5432/codelean
+      TEST_DATABASE_URL: postgresql://codelean:ci-test-password@localhost:5432/codelean
       APP_URL: http://localhost:3100
       ADMIN_EMAILS: admin@example.test
       BETTER_AUTH_SECRET: ci-only-secret-not-a-deployment-credential-123456789

@@ -49,7 +49,7 @@ await heartbeat();
 const timer = setInterval(() => {
   void heartbeat();
 }, 15_000);
-console.log("Luoda review worker ready (concurrency 1)");
+console.log("Codelean review worker ready (concurrency 1)");
 try {
   while (!stopping) {
     const run = (

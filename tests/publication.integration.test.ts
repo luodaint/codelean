@@ -18,7 +18,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
       labels_enabled: false,
     };
     let run: Run;
-    const checks: { id: number; external_id: string }[] = [];
+    const checks: { id: number; external_id: string; name: string }[] = [];
     const comments: {
       id: number;
       body: string;
@@ -60,14 +60,25 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
             head: { sha: head },
             base: { sha: "a".repeat(40) },
           };
-        if (method === "GET" && path.includes("/check-runs?"))
-          return { check_runs: checks };
+        if (method === "GET" && path.includes("/check-runs?")) {
+          const name = new URL(path, "https://api.github.com").searchParams.get(
+            "check_name",
+          );
+          return { check_runs: checks.filter((check) => check.name === name) };
+        }
         writes.push({ method, body });
         if (path.endsWith("/check-runs") && method === "POST") {
-          checks.push({ id: 101, external_id: String(body.external_id) });
+          checks.push({
+            id: 101,
+            external_id: String(body.external_id),
+            name: String(body.name),
+          });
           return { id: 101 };
         }
-        if (path.endsWith("/check-runs/101")) return { id: 101 };
+        if (path.endsWith("/check-runs/101")) {
+          checks[0].name = String(body.name);
+          return { id: 101 };
+        }
         if (path.endsWith("/comments") && method === "POST") {
           comments.push({
             id: 201,
@@ -84,7 +95,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
           reviews.push({
             id: 301,
             body: String(body.body),
-            user: { login: "luoda-test[bot]" },
+            user: { login: "codelean-test[bot]" },
           });
           return { id: 301 };
         }
@@ -100,7 +111,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
     beforeAll(async () => {
       vi.stubEnv("DATABASE_URL", process.env.TEST_DATABASE_URL!);
       vi.stubEnv("GITHUB_APP_ID", "123");
-      vi.stubEnv("GITHUB_APP_SLUG", "luoda-test");
+      vi.stubEnv("GITHUB_APP_SLUG", "codelean-test");
       vi.stubEnv("APP_URL", "http://localhost:3100");
       await db().query(
         "INSERT INTO repositories(id,installation_id,full_name,enabled) VALUES($1,$2,$3,true)",
@@ -142,6 +153,18 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
         review_id: "301",
         publication_started: true,
       });
+    });
+    it("reuses pre-Codelean checks and bot comments after the rename", async () => {
+      checks[0].name = "Luoda review";
+      comments[0].body = "<!-- luoda-pr-checker:summary -->\nOld review";
+      reviews[0].body = `<!-- luoda-pr-checker:run:${run.id} -->`;
+      await beginCheck(run, repo, gh);
+      await publish(run, result, repo, gh);
+      expect(checks).toHaveLength(1);
+      expect(checks[0].name).toBe("Codelean review");
+      expect(comments).toHaveLength(1);
+      expect(comments[0].body).toContain("## Codelean review");
+      expect(reviews).toHaveLength(1);
     });
     it("makes no further writes after GitHub reports a new head", async () => {
       head = "c".repeat(40);

@@ -57,7 +57,7 @@ def scan(files):
         if len(file["content"].encode()) > 100_000 or size > 1_500_000:
             raise ValueError("Source limit exceeded")
         seen.add(file["path"])
-    with tempfile.TemporaryDirectory(prefix="luoda-") as temp:
+    with tempfile.TemporaryDirectory(prefix="codelean-") as temp:
         root = pathlib.Path(temp)
         source = root / "source"
         source.mkdir()

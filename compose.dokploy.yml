@@ -6,10 +6,10 @@ services:
     labels:
       traefik.enable: "true"
       traefik.docker.network: dokploy-network
-      traefik.http.routers.luoda-pr-checker.rule: Host(`${APP_DOMAIN:?Set APP_DOMAIN}`)
-      traefik.http.routers.luoda-pr-checker.entrypoints: websecure
-      traefik.http.routers.luoda-pr-checker.tls.certresolver: letsencrypt
-      traefik.http.services.luoda-pr-checker.loadbalancer.server.port: "3000"
+      traefik.http.routers.codelean.rule: Host(`${APP_DOMAIN:?Set APP_DOMAIN}`)
+      traefik.http.routers.codelean.entrypoints: websecure
+      traefik.http.routers.codelean.tls.certresolver: letsencrypt
+      traefik.http.services.codelean.loadbalancer.server.port: "3000"
 networks:
   dokploy-network:
     external: true

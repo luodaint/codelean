@@ -1,10 +1,14 @@
-LUODA PR CHECKER — SERVER PREPARATION AND INSTALLATION BRIEF
+CODELEAN — SERVER PREPARATION AND INSTALLATION BRIEF
 Prepared: 2026-09-30
 Audience: Codex, Claude, or a human operator working on the target Linux server.
 
 PURPOSE AND CURRENT STATUS
 
-Prepare a self-hosted deployment of luoda-pr-checker using Docker Compose and
+Repository: git@github.com:luodaint/codelean.dev.git (private; authorized access required).
+Default production domain: codelean.dev; Cloudflare manages DNS.
+Domain and local tunnel guide: docs/domain-setup.md.
+
+Prepare a self-hosted deployment of Codelean using Docker Compose and
 Dokploy. Support both an existing Dokploy host and a fresh server. The application
 uses Next.js, PostgreSQL, background review jobs, isolated scanners, and NaN for
 model inference. An AI coding agent is a setup convenience, not a runtime service.
@@ -23,7 +27,7 @@ INPUTS TO RESOLVE
 - Actual repository URL or local checkout and release tag/digest to install.
 - Public application domain and, for fresh setup, Dokploy administration domain.
 - Administrative account, public SSH key, allowed admin networks or VPN path.
-- ADMIN_EMAILS allowlist and SMTP sender/credentials for production email codes.
+- ADMIN_EMAILS allowlist and GitHub App sign-in credentials; optional SMTP for email codes.
 - Recovery console availability and backup destination/retention.
 - Secure way to supply GitHub App credentials, NaN credentials, and app secrets.
 
@@ -134,7 +138,7 @@ Then remove temporary setup exposure without breaking the verified access path.
 Keep the Dokploy admin private/restricted independently of the app's public
 GitHub webhook. Record the recovery path without disclosing recovery secrets.
 
-STEP 5 — INSTALL THE LUODA PR CHECKER BUNDLE
+STEP 5 — INSTALL THE CODELEAN BUNDLE
 
 If the application deployment files are missing, report the preparation results
 and missing release deliverables now. Do not fabricate the remainder.
@@ -169,7 +173,10 @@ the documented isolated backend and enforce fixed images, mounts, and commands.
 Treat scanner containers as limited isolation, not proof of VM-level separation.
 
 Use compose.yml plus compose.dokploy.yml, or Dokploy domain routing as documented.
-Set APP_URL/APP_DOMAIN, ADMIN_EMAILS, SMTP and all generated/application secrets.
+Set APP_URL/APP_DOMAIN, ADMIN_EMAILS, GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET,
+all generated/application secrets, and optional SMTP for email-code fallback.
+Set the App callback to https://YOUR_HOST/api/auth/callback/github and account
+permission Email addresses: Read-only. Sign-in does not grant repository access.
 Production Compose forces DEV_AUTH_BYPASS=false; never enable the development
 numeric-code bypass on the server. Only local next dev may use that option.
 The migration service applies SQL and Better Auth migrations before web/worker.

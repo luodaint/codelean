@@ -16,7 +16,7 @@ export default async function Repositories({
       <div className="page-heading">
         <div>
           <h1>Repositories</h1>
-          <p>Choose where Luoda reviews, and how it contributes.</p>
+          <p>Choose where Codelean reviews, and how it contributes.</p>
         </div>
         {configured && (
           <a

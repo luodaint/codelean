@@ -2,14 +2,16 @@ import { CircleCheck, CircleDashed } from "lucide-react";
 import { appUrl } from "@/lib/config";
 import { requireAdmin } from "@/lib/auth";
 export default async function Settings() {
-  await requireAdmin();
+  const session = await requireAdmin();
   const checks = [
+    ["GitHub sign-in client ID", "GITHUB_CLIENT_ID"],
+    ["GitHub sign-in client secret", "GITHUB_CLIENT_SECRET"],
     ["GitHub App ID", "GITHUB_APP_ID"],
     ["GitHub private key", "GITHUB_PRIVATE_KEY_BASE64"],
     ["GitHub App slug", "GITHUB_APP_SLUG"],
     ["Webhook secret", "GITHUB_WEBHOOK_SECRET"],
     ["Review model", "NAN_MODEL"],
-    ["Email server", "SMTP_HOST"],
+    ["Email server (optional fallback)", "SMTP_HOST"],
     ["Allowed administrators", "ADMIN_EMAILS"],
   ];
   return (
@@ -20,6 +22,33 @@ export default async function Settings() {
           <p>Your instance’s connections and review defaults.</p>
         </div>
       </div>
+      <section className="panel endpoint">
+        <h2>Your account</h2>
+        <p>
+          {session.user.name || session.user.email} · {session.user.email}
+        </p>
+        {session.user.githubUsername ? (
+          <p>
+            <a
+              href={`https://github.com/${session.user.githubUsername}`}
+              target="_blank"
+              rel="noreferrer"
+            >
+              @{session.user.githubUsername}
+            </a>{" "}
+            · GitHub ID {session.user.githubId}
+          </p>
+        ) : (
+          <p>
+            Signed in with an email code. Sign out and continue with GitHub to
+            connect your identity using a matching verified email.
+          </p>
+        )}
+        <p>
+          GitHub sign-in identifies you. Repository access is granted separately
+          by installing the App.
+        </p>
+      </section>
       <div className="settings-grid">
         <section className="panel">
           <div className="panel-heading">
@@ -69,6 +98,13 @@ export default async function Settings() {
           </dl>
         </section>
       </div>
+      <section className="panel endpoint">
+        <h2>GitHub sign-in callback</h2>
+        <p>
+          Add this callback URL to the GitHub App’s user authorization settings.
+        </p>
+        <code>{appUrl()}/api/auth/callback/github</code>
+      </section>
       <section className="panel endpoint">
         <h2>GitHub webhook</h2>
         <p>

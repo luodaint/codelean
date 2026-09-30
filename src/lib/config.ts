@@ -20,3 +20,18 @@ export const limits = {
   findings: 20,
   comments: 5,
 };
+
+export function githubLoginConfigured() {
+  return Boolean(
+    process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET,
+  );
+}
+
+export function emailLoginConfigured() {
+  return Boolean(
+    process.env.SMTP_HOST &&
+    process.env.SMTP_USER &&
+    process.env.SMTP_PASSWORD &&
+    process.env.EMAIL_FROM,
+  );
+}

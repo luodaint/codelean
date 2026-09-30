@@ -46,9 +46,9 @@ describe("trust boundaries", () => {
     expect(localOtpBypass("production", "true", "http://localhost:3100")).toBe(
       false,
     );
-    expect(
-      localOtpBypass("development", "true", "https://reviews.example.com"),
-    ).toBe(false);
+    expect(localOtpBypass("development", "true", "https://codelean.dev")).toBe(
+      false,
+    );
     expect(
       localOtpBypass("development", undefined, "http://localhost:3100"),
     ).toBe(false);

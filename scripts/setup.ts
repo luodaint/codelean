@@ -15,10 +15,10 @@ for (const [key, value] of Object.entries({
   );
 }
 template = template.replace(
-  "postgresql://luoda:replace-me@",
-  `postgresql://luoda:${databasePassword}@`,
+  "postgresql://codelean:replace-me@",
+  `postgresql://codelean:${databasePassword}@`,
 );
 await writeFile(".env", template, { mode: 0o600, flag: "wx" });
 console.log(
-  "Created .env with restricted permissions. Fill in APP_URL, ADMIN_EMAILS, SMTP, GitHub App credentials, and NAN_API_KEY/NAN_MODEL. Existing files are never overwritten.",
+  "Created .env with restricted permissions. Fill in APP_URL, ADMIN_EMAILS, GitHub App credentials (including GITHUB_CLIENT_ID/GITHUB_CLIENT_SECRET), and NAN_API_KEY/NAN_MODEL. SMTP is optional for email-code fallback. Existing files are never overwritten.",
 );
