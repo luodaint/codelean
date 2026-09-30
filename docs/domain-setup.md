@@ -27,7 +27,25 @@ Keep user authorization during installation unchecked; Better Auth initiates log
 
 A GitHub App has one active webhook destination. For concurrent local and production reviews, use separate development and production GitHub Apps with independent credentials, webhook secrets, and selected repositories. Choose **Any account** if installing a personally owned App into the `luodaint` organization; **Only on this account** limits installation to its owner. Repository visibility and App installation visibility are separate settings.
 
-## Optional Cloudflare tunnel for local PR events
+## Quick Tunnel for local PR events
+
+Install `cloudflared` using `brew install cloudflared` on macOS or [Cloudflare's official downloads](https://developers.cloudflare.com/tunnel/downloads/) on another platform. With Next.js running on port 3100, start these in separate terminals:
+
+```sh
+npm run webhook:proxy
+```
+
+```sh
+cloudflared tunnel --url http://127.0.0.1:3101 --no-autoupdate
+```
+
+Copy the generated `https://…trycloudflare.com` origin and append `/api/webhooks/github` for the GitHub App's webhook URL. Enable the webhook and enter the same `GITHUB_WEBHOOK_SECRET` as your local `.env`. Keep the callback URL and `APP_URL` on localhost. The proxy permits only `POST /api/webhooks/github`, caps request bodies at 2 MB, and passes the original payload bytes and GitHub signature headers to the app. Other paths/methods return 404. Do not point the tunnel directly at the Next.js port.
+
+The Quick Tunnel uses a temporary Cloudflare hostname and does not change `codelean.dev` DNS. Restarting it generates a new URL: update the App webhook each time. Keep the app, proxy, tunnel and worker running during PR testing; stop the proxy and tunnel with Ctrl+C afterwards. If local ports differ, set `LOCAL_APP_PORT` and/or `WEBHOOK_PROXY_PORT` for the proxy and adjust the tunnel target to match.
+
+Before trusting the setup, check that the public `/login` and `/api/auth/sign-in/email-otp` return 404 and that an unsigned POST to the webhook with a valid `x-github-delivery` header returns 401. A signed GitHub delivery must return 200. See [Cloudflare's Quick Tunnel documentation](https://developers.cloudflare.com/tunnel/get-started/#quick-tunnels-development).
+
+## Optional named tunnel for a stable development hostname
 
 This forwards only the webhook path. Login and the admin remain on localhost, including when the local numeric-code bypass is enabled. Do not tunnel the whole development server.
 
