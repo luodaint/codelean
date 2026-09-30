@@ -7,18 +7,70 @@ export class ModelReviewError extends Error {
   }
 }
 
-// Consume the provider's SSE stream without storing or exposing reasoning text.
-// Streaming keeps long reasoning requests active through the provider's proxy.
-export async function readModelResponse(response: Response) {
-  if (!response.headers.get("content-type")?.includes("text/event-stream")) {
+const maxResponseBytes = 32_000_000;
+
+async function readJsonResponse(response: Response) {
+  const reader = response.body?.getReader();
+  if (!reader)
+    throw new ModelReviewError(
+      "Model provider returned an unreadable response. No clean review was produced.",
+    );
+  const decoder = new TextDecoder();
+  let text = "",
+    bytes = 0;
+  try {
+    while (true) {
+      const part = await reader.read();
+      if (part.done) break;
+      bytes += part.value.byteLength;
+      if (bytes > maxResponseBytes)
+        throw new ModelReviewError(
+          "Model response exceeded the size limit. No clean review was produced.",
+        );
+      text += decoder.decode(part.value, { stream: true });
+    }
+    text += decoder.decode();
+    let data;
     try {
-      return await response.json();
+      data = JSON.parse(text);
     } catch {
       throw new ModelReviewError(
         "Model provider returned an unreadable response. No clean review was produced.",
       );
     }
+    if (!data || typeof data !== "object" || Array.isArray(data))
+      throw new ModelReviewError(
+        "Model provider returned an unreadable response. No clean review was produced.",
+      );
+    if (data.error)
+      throw new ModelReviewError(
+        "Model provider reported a response error. No clean review was produced.",
+      );
+    const choice = data.choices?.[0];
+    const content = choice?.message?.content;
+    if (typeof content === "string" && content.length > 80_000)
+      throw new ModelReviewError(
+        "Model output exceeded the review limit. No clean review was produced.",
+      );
+    // Return only fields the review consumes; discard reasoning and provider details.
+    return {
+      choices: [{ message: { content }, finish_reason: choice?.finish_reason }],
+      usage: data.usage ? { total_tokens: data.usage.total_tokens } : undefined,
+      ...(data.nan_truncation || data.usage?.nan_truncation
+        ? { nan_truncation: true }
+        : {}),
+    };
+  } finally {
+    await reader.cancel().catch(() => {});
+    reader.releaseLock();
   }
+}
+
+// Consume the provider's SSE stream without storing or exposing reasoning text.
+// Streaming keeps long reasoning requests active through the provider's proxy.
+export async function readModelResponse(response: Response) {
+  if (!response.headers.get("content-type")?.includes("text/event-stream"))
+    return readJsonResponse(response);
   const reader = response.body?.getReader();
   if (!reader)
     throw new ModelReviewError(
@@ -71,7 +123,7 @@ export async function readModelResponse(response: Response) {
       const part = await reader.read();
       if (part.done) break;
       bytes += part.value.byteLength;
-      if (bytes > 32_000_000)
+      if (bytes > maxResponseBytes)
         throw new ModelReviewError(
           "Model stream exceeded the size limit. No clean review was produced.",
         );

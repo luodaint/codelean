@@ -378,7 +378,7 @@ async function requestReviewBatch(
     );
   const data = await readModelResponse(response);
   const content = data.choices?.[0]?.message?.content;
-  if (data.nan_truncation || data.usage?.nan_truncation)
+  if (data.nan_truncation)
     throw new ModelReasoningLimitError(
       "NaN stopped a reasoning-only response before the agent answered. Increasing output tokens cannot override this provider limit. Try smaller batches or a model with controllable reasoning. No clean review was produced.",
     );
