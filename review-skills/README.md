@@ -105,3 +105,7 @@ clean review. See [NaN's model contract](https://nan.builders/docs/models).
 Changes here apply to all workspaces served by this deployment. Per-workspace or
 per-repository skill selection is not implemented. A PR editing this folder is
 reviewed as untrusted code until an operator deploys that revision.
+
+Model requests use streaming to keep long reasoning responses active through the
+provider proxy. Reasoning text is discarded; only the final answer and token usage
+are retained. Incomplete streams fail the run instead of publishing partial output.

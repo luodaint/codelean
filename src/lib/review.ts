@@ -3,8 +3,8 @@ import { limits, required } from "./config";
 import { redact, safePath } from "./security";
 import type { Finding, SourceFile } from "./types";
 import { loadReviewSkills } from "./review-skills";
-
-export class ModelReviewError extends Error {}
+import { ModelReviewError, readModelResponse } from "./model-response";
+export { ModelReviewError } from "./model-response";
 
 export const findingSchema = z
   .object({
@@ -118,6 +118,8 @@ export async function modelReview(
         model,
         temperature: 0.1,
         max_tokens: limits.modelOutputTokens,
+        stream: true,
+        stream_options: { include_usage: true },
         // NaN supports json_object for DeepSeek; json_schema is not supported.
         ...(model === "deepseek-v4-flash"
           ? { response_format: { type: "json_object" } }
@@ -147,7 +149,7 @@ export async function modelReview(
     throw new ModelReviewError(
       `Model provider returned ${response.status}. No clean review was produced.`,
     );
-  const data = await response.json();
+  const data = await readModelResponse(response);
   const content = data.choices?.[0]?.message?.content;
   if (data.choices?.[0]?.finish_reason === "length")
     throw new ModelReviewError(
