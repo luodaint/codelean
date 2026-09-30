@@ -6,6 +6,7 @@ import { canManage } from "@/lib/workspaces";
 import { githubConfigured } from "@/lib/config";
 import { sync, updateRepository } from "@/app/actions";
 import { Submit } from "@/components/submit";
+import { InstallationRefresh } from "@/components/installation-refresh";
 export default async function Repositories({
   searchParams,
 }: {
@@ -32,14 +33,17 @@ export default async function Repositories({
           <p>Choose where Codelean reviews, and how it contributes.</p>
         </div>
         {configured && managing && (
-          <a
-            className="button"
-            href={`https://github.com/apps/${encodeURIComponent(process.env.GITHUB_APP_SLUG!)}/installations/new`}
-            target="_blank"
-            rel="noreferrer"
-          >
-            Install GitHub App <ArrowUpRight size={16} />
-          </a>
+          <div className="repository-actions">
+            <InstallationRefresh />
+            <a
+              className="button"
+              href={`https://github.com/apps/${encodeURIComponent(process.env.GITHUB_APP_SLUG!)}/installations/new`}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Install GitHub App <ArrowUpRight size={16} />
+            </a>
+          </div>
         )}
       </div>
       {!configured && (
@@ -61,6 +65,14 @@ export default async function Repositories({
           again, or ask the instance operator to check the App configuration.
         </div>
       )}
+      {configured && managing && !githubError && installations.length === 0 && (
+        <div className="notice">
+          No installation is available for your signed-in GitHub account yet.
+          Install the App on an account you own, then refresh installations.
+          Organization installations may need approval from an organization
+          owner.
+        </div>
+      )}
       {params.synced && (
         <div className="notice success">
           Repository access is up to date. Enable reviews for the repositories
@@ -76,11 +88,19 @@ export default async function Repositories({
               workspace. GitHub organization owners can connect their company.
             </p>
           </div>
-          {configured && managing && (
-            <form action={sync}>
+          {configured && managing && installations.length > 0 && (
+            <form action={sync} className="installation-connect">
               <label>
                 GitHub account{" "}
-                <select name="installation" required defaultValue="">
+                <select
+                  name="installation"
+                  required
+                  defaultValue={
+                    installations.length === 1
+                      ? String(installations[0].id)
+                      : ""
+                  }
+                >
                   <option value="" disabled>
                     Select an installation
                   </option>

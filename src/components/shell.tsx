@@ -5,7 +5,13 @@ import { Navigation } from "./navigation";
 export function Brand() {
   return (
     <span className="brand">
-      <ShieldCheck size={28} strokeWidth={1.7} />
+      <img
+        className="brand-mark"
+        src="/brand/codelean-mark.png"
+        width={42}
+        height={42}
+        alt=""
+      />
       <span>
         codelean<span className="brand-sub">PR checker</span>
       </span>

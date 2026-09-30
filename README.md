@@ -1,3 +1,5 @@
+<p align="center"><img src="public/brand/codelean-mark.png" width="112" height="112" alt="Codelean logo"></p>
+
 # Codelean · codelean.dev
 
 A self-hosted GitHub PR reviewer with a Next.js admin, PostgreSQL queue, Semgrep/Gitleaks static checks, and AI review through NaN. Designed for a small Dokploy installation on Hetzner.
@@ -116,6 +118,7 @@ To resume, repeat the Compose `up` command, `npm run migrate`, and the web/worke
 - **Database connection refused:** verify Docker is running and PostgreSQL is healthy before migrations. Check that `DATABASE_URL` matches the configured port and credentials. Changing `POSTGRES_PASSWORD` does not change the password inside an existing database volume.
 - **Email not authorized:** if `SIGNUP_MODE=restricted`, the email must appear in `ADMIN_EMAILS`; use `SIGNUP_MODE=open` for public signup. Local numeric sign-in still requires requesting a code first; no actual email is sent.
 - **Local code rejected:** run `npm run dev`, use a loopback `APP_URL`, and set `DEV_AUTH_BYPASS=true`. A production build or Compose web container requires GitHub sign-in or a real emailed code.
+- **Only your personal GitHub account appears:** in the GitHub App’s **Advanced** settings, check that it is public (installable by any account). Install the same App separately on each organization, then refresh installations and sync. Each organization must grant repository access; signing in alone does not grant it.
 - **Worker offline:** run `npm run worker` in a second terminal. Only one worker can hold the database lock; stop an older worker before starting another.
 - **Scanner still starting:** the first image build downloads the scanner dependencies and can take several minutes. Check its scoped logs with `docker compose -p codelean-dev -f compose.yml -f compose.dev.yml logs --tail 50 scanner`.
 
@@ -125,6 +128,7 @@ To resume, repeat the Compose `up` command, `npm run migrate`, and the web/worke
 - [Installation, configuration, GitHub setup, backups and upgrades](docs/installation.md)
 - [Standalone Codex/Claude server preparation brief](docs/server-bootstrap.txt)
 - [Architecture and current boundaries](docs/architecture.md)
+- [Logo assets and branding](docs/branding.md)
 
 Use the existing Dokploy host first, with one review at a time. No cluster is needed. The scanner has a 2 GiB memory cap; assess headroom alongside existing applications before deployment.
 
