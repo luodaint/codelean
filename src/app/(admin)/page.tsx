@@ -10,6 +10,10 @@ export default async function Dashboard({
 }) {
   const params = await searchParams;
   const data = await overview(params.q, params.status);
+  const connectedRepositories = data.repositories.filter((r) => r.connected);
+  const enabledRepositories = connectedRepositories.filter(
+    (r) => r.enabled,
+  ).length;
   return (
     <>
       <LiveRefresh />
@@ -19,7 +23,10 @@ export default async function Dashboard({
           <p>A clear view of what changed, and what needs a closer look.</p>
         </div>
         <Link className="button" href="/repositories">
-          <Plus size={17} /> Add repository
+          <Plus size={17} />{" "}
+          {connectedRepositories.length
+            ? "Manage repositories"
+            : "Add repository"}
         </Link>
       </div>
       <div className="metrics">
@@ -89,12 +96,17 @@ export default async function Dashboard({
           </select>
           <button className="button secondary">Filter</button>
         </form>
-        <RunsTable runs={data.runs} />
+        <RunsTable
+          runs={data.runs}
+          connectedRepositories={connectedRepositories.length}
+          enabledRepositories={enabledRepositories}
+          filtered={Boolean(params.q || params.status)}
+        />
       </section>
       <div className="under-panel">
         <span>
-          {data.repositories.filter((r) => r.enabled && r.connected).length}{" "}
-          repositories enabled
+          {enabledRepositories}{" "}
+          {enabledRepositories === 1 ? "repository" : "repositories"} enabled
         </span>
         <span>
           Advisory mode <span className="tiny-dot" />
