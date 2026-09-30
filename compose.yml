@@ -88,6 +88,7 @@ services:
       NAN_BASE_URL: ${NAN_BASE_URL:-https://api.nan.builders/v1}
       NAN_API_KEY: ${NAN_API_KEY:-}
       NAN_MODEL: ${NAN_MODEL:-}
+      NAN_FALLBACK_MODEL: ${NAN_FALLBACK_MODEL:-}
       SCANNER_URL: http://scanner:8080
       SCANNER_TOKEN: ${SCANNER_TOKEN:?Generate scanner token}
     networks: [backend, scans, default]

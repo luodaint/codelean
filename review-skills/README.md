@@ -120,7 +120,7 @@ skill. The database worker lock still allows only one PR run at a time. Live
 progress shows completed/total batches for each specialist and active agents.
 
 The AI phases share a ten-minute deadline (`modelRunTimeoutMs`), in addition to
-the six-minute per-request limit. Failure cancels sibling requests and queued
+the six-minute per-agent limit (including correction and fallback). Failure cancels sibling requests and queued
 batches; results are published only when every required phase succeeds. An invalid JSON/schema answer gets one format-correction request inside the same
 agent slot and deadline; source evidence is validated again. Both calls count in
 token usage when correction succeeds. Timeout, truncated output, and answers
@@ -136,3 +136,11 @@ Agents SDK. Agents have no tools or repository write access.
 Skills are frozen once per phase; candidate verification only visits batches with candidates. Interactions across batches
 are not analyzed together, so multi-batch runs explicitly report partial coverage.
 Token totals combine all successful batch calls; failed attempts are not included.
+
+Set `NAN_FALLBACK_MODEL=glm5.3-flash` to enable an optional fallback for NaN's
+reasoning-only cutoff. The primary `NAN_MODEL` remains unchanged. Only an explicit
+provider cutoff triggers this fallback; the fallback receives the same source,
+skill instructions, and validation, with `reasoning_effort: medium`. It shares the
+agent slot and deadline, gets at most one format correction, and cannot recursively
+fall back. Run results identify the models used and include a coverage warning.
+Leave the variable empty to disable it. The local test deployment enables it.

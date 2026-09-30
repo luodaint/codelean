@@ -193,11 +193,13 @@ export async function modelReview(
     findings: allFindings.slice(0, limits.findings),
     warnings,
     tokens: results.reduce((n, r) => n + r.tokens, 0),
-    model: results[0].model,
+    model: [...new Set(results.map((r) => r.model))].join(", "),
     skills: skills.versions,
     batches: batches.length,
   };
 }
+
+class ModelReasoningLimitError extends ModelReviewError {}
 
 class ModelFormatError extends ModelReviewError {
   constructor(
@@ -231,20 +233,23 @@ async function reviewBatch(
     options.signal,
     AbortSignal.timeout(limits.modelTimeoutMs),
   ]);
-  try {
+  const runAgent = async (model?: string, reasoningEffort?: string) => {
     try {
       return await requestReviewBatch(files, scannerFindings, {
         ...options,
         signal,
+        model,
+        reasoningEffort,
       });
     } catch (error) {
       if (!(error instanceof ModelFormatError)) throw error;
       signal.throwIfAborted();
       // One bounded correction stays in this agent's slot and time budget.
-      // Earlier batches remain complete; every corrected finding is validated.
       const corrected = await requestReviewBatch(files, scannerFindings, {
         ...options,
         signal,
+        model,
+        reasoningEffort,
         repair: { output: error.output, feedback: error.feedback },
       });
       return {
@@ -253,6 +258,31 @@ async function reviewBatch(
         warnings: [
           ...corrected.warnings,
           "A model answer required format correction; its evidence was revalidated.",
+        ],
+      };
+    }
+  };
+  try {
+    try {
+      return await runAgent();
+    } catch (error) {
+      const fallback = process.env.NAN_FALLBACK_MODEL?.trim();
+      if (
+        !(error instanceof ModelReasoningLimitError) ||
+        !fallback ||
+        fallback === required("NAN_MODEL")
+      )
+        throw error;
+      signal.throwIfAborted();
+      console.info(
+        "Review agent using configured fallback after provider reasoning cutoff",
+      );
+      const result = await runAgent(fallback, "medium");
+      return {
+        ...result,
+        warnings: [
+          ...result.warnings,
+          `The primary model reached NaN's reasoning cutoff; this batch was reviewed by the configured fallback model (${fallback}).`,
         ],
       };
     }
@@ -274,9 +304,11 @@ async function requestReviewBatch(
     candidates?: Finding[];
     signal: AbortSignal;
     repair?: { output: string; feedback: string };
+    model?: string;
+    reasoningEffort?: string;
   },
 ) {
-  const model = required("NAN_MODEL");
+  const model = options.model || required("NAN_MODEL");
   const url = new URL(
     process.env.NAN_BASE_URL || "https://api.nan.builders/v1",
   );
@@ -293,6 +325,9 @@ async function requestReviewBatch(
       body: JSON.stringify({
         model,
         temperature: 0.1,
+        ...(options.reasoningEffort
+          ? { reasoning_effort: options.reasoningEffort }
+          : {}),
         max_tokens: limits.modelOutputTokens,
         stream: true,
         stream_options: { include_usage: true },
@@ -344,7 +379,7 @@ async function requestReviewBatch(
   const data = await readModelResponse(response);
   const content = data.choices?.[0]?.message?.content;
   if (data.nan_truncation || data.usage?.nan_truncation)
-    throw new ModelReviewError(
+    throw new ModelReasoningLimitError(
       "NaN stopped a reasoning-only response before the agent answered. Increasing output tokens cannot override this provider limit. Try smaller batches or a model with controllable reasoning. No clean review was produced.",
     );
   if (data.choices?.[0]?.finish_reason === "length")

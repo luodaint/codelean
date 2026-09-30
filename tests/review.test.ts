@@ -315,6 +315,73 @@ describe("review validation", () => {
       "Increasing output tokens cannot override",
     );
   });
+  it("falls back only the affected agent after a provider reasoning cutoff", async () => {
+    vi.stubEnv("NAN_API_KEY", "test-key");
+    vi.stubEnv("NAN_MODEL", "deepseek-v4-flash");
+    vi.stubEnv("NAN_FALLBACK_MODEL", "glm5.3-flash");
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(
+        Response.json({
+          choices: [{ finish_reason: "length", message: { content: "" } }],
+          nan_truncation: true,
+        }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  summary: "Fallback review",
+                  findings: [finding],
+                }),
+              },
+            },
+          ],
+          usage: { total_tokens: 15 },
+        }),
+      );
+    vi.stubGlobal("fetch", fetcher);
+    const result = await modelReview(files, []);
+    expect(result.model).toBe("glm5.3-flash");
+    expect(result.findings).toHaveLength(1);
+    expect(result.tokens).toBe(15);
+    expect(result.warnings.join()).toContain("fallback");
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    const first = JSON.parse(fetcher.mock.calls[0][1].body);
+    const second = JSON.parse(fetcher.mock.calls[1][1].body);
+    expect(second.model).toBe("glm5.3-flash");
+    expect(second.reasoning_effort).toBe("medium");
+    expect(second.messages).toEqual(first.messages);
+  });
+  it("does not recursively fall back when the fallback also reaches the cutoff", async () => {
+    vi.stubEnv("NAN_API_KEY", "test-key");
+    vi.stubEnv("NAN_MODEL", "deepseek-v4-flash");
+    vi.stubEnv("NAN_FALLBACK_MODEL", "glm5.3-flash");
+    const fetcher = vi
+      .fn()
+      .mockImplementation(async () =>
+        Response.json({
+          choices: [{ finish_reason: "length", message: { content: "" } }],
+          nan_truncation: true,
+        }),
+      );
+    vi.stubGlobal("fetch", fetcher);
+    await expect(modelReview(files, [])).rejects.toThrow("reasoning-only");
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+  it("does not use fallback to mask provider outages", async () => {
+    vi.stubEnv("NAN_API_KEY", "test-key");
+    vi.stubEnv("NAN_MODEL", "deepseek-v4-flash");
+    vi.stubEnv("NAN_FALLBACK_MODEL", "glm5.3-flash");
+    const fetcher = vi
+      .fn()
+      .mockResolvedValue(new Response("unavailable", { status: 503 }));
+    vi.stubGlobal("fetch", fetcher);
+    await expect(modelReview(files, [])).rejects.toThrow("503");
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
   it("does not turn scanner outages into empty clean results", async () => {
     vi.stubEnv("SCANNER_URL", "http://scanner:8080");
     vi.stubEnv("SCANNER_TOKEN", "token");

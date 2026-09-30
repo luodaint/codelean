@@ -514,7 +514,13 @@ export async function processRun(run: Run) {
         run.id,
         JSON.stringify(result),
         model.tokens + security.audit.tokens,
-        model.model,
+        [
+          ...new Set(
+            [model.model, security.audit.model]
+              .filter(Boolean)
+              .flatMap((name) => name!.split(", ")),
+          ),
+        ].join(", "),
       ],
     );
   }
