@@ -54,15 +54,18 @@ export class ReviewOrchestrator {
   }
 
   private report() {
-    const message =
-      [...this.counts]
-        .map(
-          ([phase, count]) =>
-            `${phase}: ${count.completed}/${count.total} complete`,
-        )
-        .join(" · ") + ` · ${this.active} active`;
-    // Serialize database writes so older progress cannot overwrite newer state.
-    this.progress = this.progress.then(() => this.onProgress(message));
+    // Serialize writes and render current counts at write time, after synchronous
+    // batch registration, so the first update includes queued batches too.
+    this.progress = this.progress.then(() => {
+      const message =
+        [...this.counts]
+          .map(
+            ([phase, count]) =>
+              `${phase}: ${count.completed}/${count.total} complete`,
+          )
+          .join(" · ") + ` · ${this.active} active`;
+      return this.onProgress(message);
+    });
     return this.progress;
   }
 

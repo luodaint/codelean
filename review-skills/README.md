@@ -121,8 +121,10 @@ progress shows completed/total batches for each specialist and active agents.
 
 The AI phases share a ten-minute deadline (`modelRunTimeoutMs`), in addition to
 the six-minute per-request limit. Failure cancels sibling requests and queued
-batches; results are published only when every required phase succeeds. Timeout,
-truncated output, and invalid structured answers require a manual retry instead
+batches; results are published only when every required phase succeeds. An invalid JSON/schema answer gets one format-correction request inside the same
+agent slot and deadline; source evidence is validated again. Both calls count in
+token usage when correction succeeds. Timeout, truncated output, and answers
+that remain invalid after correction require a manual retry instead
 of automatically repeating the same expensive run. Transient provider HTTP
 errors (408, 429, 5xx) retain the existing bounded worker retry. Completed batches
 are not checkpointed across retries or worker restarts.
@@ -131,7 +133,6 @@ The orchestration is deterministic TypeScript in `src/lib/review-orchestrator.ts
 using the NaN streaming transport. It does not need a planner model or the OpenAI
 Agents SDK. Agents have no tools or repository write access.
 
-Skills are frozen once per phase; candidate
-verification only visits batches with candidates. Interactions across batches
+Skills are frozen once per phase; candidate verification only visits batches with candidates. Interactions across batches
 are not analyzed together, so multi-batch runs explicitly report partial coverage.
 Token totals combine all successful batch calls; failed attempts are not included.
