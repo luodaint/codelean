@@ -12,6 +12,8 @@ Access, current-revision checks, scanner execution and source retrieval still ru
 
 Cache hits make no inference request, reserve no tokens and create no new model-usage row. Billing continues to absorb failed attempts; on a resumed successful run, only fresh validated calls in that attempt can be billed. The run's displayed token total describes the logical review including reused batches, while Billing shows customer usage charged by the ledger. Provider-capacity totals retain all actual/unknown calls from all attempts without counting reuse as a new call.
 
+Each primary or fallback model receives its own six-minute request budget; a format-correction call shares that model’s budget. The shared ten-minute review deadline still applies, so a fallback started late in the run has only the remaining overall time. Timeout changes do not invalidate already validated checkpoints.
+
 This resumes **completed batches**, not an unfinished model response. A process crash between receiving a response and saving its checkpoint can require that call again. A repeatedly failing batch can still need model/configuration changes or a smaller PR. Changing models deliberately invalidates prior checkpoints. No results can be recovered retroactively from runs performed before checkpointing was installed.
 
 Validation uses a disposable PostgreSQL database and mocked model calls. `tests/review-checkpoints.integration.test.ts` covers partial failure followed by resume, usage charged only once for fresh work, isolation between runs, changed inputs, corrupt stored results, current-authorization/payment checks, final-result cleanup with and without billing, and rollback safety.

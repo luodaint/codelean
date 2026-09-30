@@ -291,70 +291,75 @@ async function reviewBatch(
     signal: AbortSignal;
   },
 ) {
-  const signal = AbortSignal.any([
-    options.signal,
-    AbortSignal.timeout(limits.modelTimeoutMs),
-  ]);
   const runAgent = async (model?: string, reasoningEffort?: string) => {
+    // Each model gets its own request budget. A format correction shares that
+    // model's budget, and the orchestrator deadline still bounds the whole run.
+    const timeout = new AbortController();
+    const timer = setTimeout(() => timeout.abort(), limits.modelTimeoutMs);
+    timer.unref();
+    const signal = AbortSignal.any([options.signal, timeout.signal]);
     try {
-      return await requestReviewBatch(files, scannerFindings, {
-        ...options,
-        signal,
-        model,
-        reasoningEffort,
-      });
-    } catch (error) {
-      if (!(error instanceof ModelFormatError)) throw error;
       signal.throwIfAborted();
-      // One bounded correction stays in this agent's slot and time budget.
-      const corrected = await requestReviewBatch(files, scannerFindings, {
-        ...options,
-        signal,
-        model,
-        reasoningEffort,
-        repair: { output: error.output, feedback: error.feedback },
-      });
-      return {
-        ...corrected,
-        tokens: corrected.tokens + error.tokens,
-        warnings: [
-          ...corrected.warnings,
-          "A model answer required format correction; its evidence was revalidated.",
-        ],
-      };
+      try {
+        return await requestReviewBatch(files, scannerFindings, {
+          ...options,
+          signal,
+          model,
+          reasoningEffort,
+        });
+      } catch (error) {
+        if (!(error instanceof ModelFormatError)) throw error;
+        signal.throwIfAborted();
+        // One bounded correction stays in this model's slot and time budget.
+        const corrected = await requestReviewBatch(files, scannerFindings, {
+          ...options,
+          signal,
+          model,
+          reasoningEffort,
+          repair: { output: error.output, feedback: error.feedback },
+        });
+        return {
+          ...corrected,
+          tokens: corrected.tokens + error.tokens,
+          warnings: [
+            ...corrected.warnings,
+            "A model answer required format correction; its evidence was revalidated.",
+          ],
+        };
+      }
+    } catch (error) {
+      if (options.signal.aborted) throw options.signal.reason;
+      if (timeout.signal.aborted)
+        throw new ModelReviewError(
+          "A review agent exceeded its request time limit. No clean review was produced.",
+        );
+      throw error;
+    } finally {
+      clearTimeout(timer);
     }
   };
   try {
-    try {
-      return await runAgent();
-    } catch (error) {
-      const fallback = process.env.NAN_FALLBACK_MODEL?.trim();
-      if (
-        !(error instanceof ModelReasoningLimitError) ||
-        !fallback ||
-        fallback === required("NAN_MODEL")
-      )
-        throw error;
-      signal.throwIfAborted();
-      console.info(
-        "Review agent using configured fallback after provider reasoning cutoff",
-      );
-      const result = await runAgent(fallback, "medium");
-      return {
-        ...result,
-        warnings: [
-          ...result.warnings,
-          `The primary model reached NaN's reasoning cutoff; this batch was reviewed by the configured fallback model (${fallback}).`,
-        ],
-      };
-    }
+    return await runAgent();
   } catch (error) {
-    if (options.signal.aborted) throw options.signal.reason;
-    if (signal.aborted)
-      throw new ModelReviewError(
-        "A review agent exceeded its request time limit. No clean review was produced.",
-      );
-    throw error;
+    const fallback = process.env.NAN_FALLBACK_MODEL?.trim();
+    if (
+      !(error instanceof ModelReasoningLimitError) ||
+      !fallback ||
+      fallback === required("NAN_MODEL")
+    )
+      throw error;
+    options.signal.throwIfAborted();
+    console.info(
+      "Review agent using configured fallback after provider reasoning cutoff",
+    );
+    const result = await runAgent(fallback, "medium");
+    return {
+      ...result,
+      warnings: [
+        ...result.warnings,
+        `The primary model reached NaN's reasoning cutoff; this batch was reviewed by the configured fallback model (${fallback}).`,
+      ],
+    };
   }
 }
 
