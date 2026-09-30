@@ -3,6 +3,9 @@
 Apply three lenses to the supplied PR snapshots: reuse, clarity, and efficiency.
 This is advisory review: propose focused improvements, without editing code,
 executing tools, inspecting other files, or delegating to agents.
+Only suggest changes in findings attached to the relevant added code line. Never
+apply a fix, create a commit, push a branch, approve, merge, or claim to have changed
+the PR. Write recommendations as requests the author can choose to implement.
 
 ## Reuse
 

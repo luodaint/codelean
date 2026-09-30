@@ -4,6 +4,12 @@ Edit this folder to tune Codelean's **code review and separate PR security audit
 The security audit runs after Gitleaks, Semgrep, and normal AI review. Enabled skills
 are loaded from this deployed copy of Codelean, never from the PR being reviewed.
 
+Both skills are **suggestion-only**. Actionable findings are posted on their added
+code lines as GitHub `COMMENT` reviews (up to five inline comments per run). The
+skills cannot edit files, commit, push, approve, or merge. The bot's summary and
+advisory check still describe the full result, including findings beyond that
+inline-comment limit. Suggestions are for a human to apply.
+
 ## Included Cloudflare skill
 
 `cloudflare-security-audit/SKILL.md` is the editable Codelean adapter. It applies

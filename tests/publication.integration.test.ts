@@ -160,6 +160,19 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
       expect(comments[0].body).toContain("Demo audit");
       expect(reviews).toHaveLength(1);
       expect(writes.find((w) => w.body.event)?.body.event).toBe("COMMENT");
+      expect(writes.find((w) => w.body.event)?.body.comments).toEqual([
+        expect.objectContaining({
+          path: "code.js",
+          line: 1,
+          side: "RIGHT",
+          body: expect.stringContaining("Parse structured input"),
+        }),
+      ]);
+      expect(
+        writes
+          .filter((w) => w.body.event)
+          .every((w) => w.body.event === "COMMENT"),
+      ).toBe(true);
       expect(writes.some((w) => w.body.conclusion === "neutral")).toBe(true);
       const saved = (
         await db().query(
