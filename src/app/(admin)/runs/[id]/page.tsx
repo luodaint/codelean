@@ -59,6 +59,11 @@ export default async function RunPage({
                 <Submit className="button secondary" pending="Queuing…">
                   Retry this revision
                 </Submit>
+                <p className="help-text">
+                  Completed batches are reused when the revision, model and
+                  review instructions still match. Only unfinished work runs
+                  again.
+                </p>
               </form>
             )}
         </div>
@@ -79,6 +84,9 @@ export default async function RunPage({
                 <span>{run.model}</span>
                 {run.result.reviewBatches && (
                   <span>{run.result.reviewBatches} review batches</span>
+                )}
+                {!!run.result.resumedBatches && (
+                  <span>{run.result.resumedBatches} batches resumed</span>
                 )}
               </div>
               {run.result.reviewSkills?.map((skill) => (

@@ -4,6 +4,7 @@ import { appUrl, limits, required } from "./config";
 import { getRepository, GitHub, installationClient, repoPath } from "./github";
 import { addedLines, findingSchema, modelReview } from "./review";
 import { withReviewBilling, saveReviewResult } from "./billing";
+import { withReviewCheckpoints } from "./review-checkpoints";
 import { securityAudit } from "./security-audit";
 import { ReviewOrchestrator } from "./review-orchestrator";
 import { redact, safePath } from "./security";
@@ -422,7 +423,9 @@ export async function publish(
   }
 }
 export async function processRun(run: Run) {
-  return withReviewBilling(run, () => processRunInternal(run));
+  return withReviewCheckpoints(run, () =>
+    withReviewBilling(run, () => processRunInternal(run)),
+  );
 }
 async function processRunInternal(run: Run) {
   const repo = await getRepository(run.repository_id);
@@ -505,6 +508,8 @@ async function processRunInternal(run: Run) {
       securityAudit: security.audit,
       reviewSkills: model.skills,
       reviewBatches: model.batches,
+      resumedBatches:
+        model.resumedBatches + (security.audit.resumedBatches || 0),
       files: source.files.length,
       skipped: source.skipped,
       coverage:

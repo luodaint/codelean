@@ -13,6 +13,8 @@ Codelean supports multiple company workspaces using Better Auth organizations, m
 
 A single worker holds a PostgreSQL advisory session lock. Jobs are transactionally claimed with `FOR UPDATE SKIP LOCKED`. Losing the lock connection stops the worker. Duplicate webhook delivery IDs and revision uniqueness constraints prevent duplicate jobs. Automatic analysis retries stop after three attempts; once publication starts, an ambiguous failure requires an explicit retry that reconciles existing GitHub objects.
 
+Each validated model batch is saved as a PostgreSQL checkpoint scoped to its run, revisions and exact input/configuration fingerprint. Retrying or restarting the worker reuses those batches after current authorization checks; unfinished or incompatible batches execute again. Cache hits generate no new inference usage. See [resumable reviews](resumable-reviews.md).
+
 ## Review lifecycle
 
 1. Verify HMAC over the original webhook bytes; persist its delivery and job atomically. Only a synced, enabled installation repository can enqueue work.

@@ -88,6 +88,9 @@ export async function securityAudit(
       retained: findings.length,
       discoveryBatches: discovered.batches,
       verificationBatches: verified === discovered ? 0 : verified.batches,
+      resumedBatches:
+        discovered.resumedBatches +
+        (verified === discovered ? 0 : verified.resumedBatches),
       verification: discovered.findings.length
         ? "source-model-pass"
         : "no-candidates",

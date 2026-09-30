@@ -52,6 +52,7 @@ export type SecurityAuditResult = {
   verification: "source-model-pass" | "no-candidates" | "not-run";
   discoveryBatches?: number;
   verificationBatches?: number;
+  resumedBatches?: number;
 };
 export type ReviewResult = {
   summary: string;
@@ -64,4 +65,5 @@ export type ReviewResult = {
   securityAudit?: SecurityAuditResult;
   reviewSkills?: { id: string; name: string; sha256: string }[];
   reviewBatches?: number;
+  resumedBatches?: number;
 };

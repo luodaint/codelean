@@ -1,0 +1,17 @@
+# Resumable reviews
+
+Review batches now have durable PostgreSQL checkpoints. No Redis service is needed: the existing database stores validated results alongside the run and billing records.
+
+After applying migration `004_review_checkpoints.sql` and restarting the worker, each successful ordinary-review, security-discovery and security-verification batch is saved before its orchestrator slot completes. A later model failure, total timeout or worker interruption leaves those completed results intact. **Retry this revision** uses matching checkpoints and calls the model only for unfinished batches. The completed run shows how many batches were resumed.
+
+A checkpoint is scoped to one run/repository and its exact base/head revisions. Its SHA-256 fingerprint also includes phase, redacted input files and patches, scanner findings, verification candidates, full instructions, provider endpoint, primary/fallback models and output-token configuration. Changing any of these inputs recomputes the affected work. Bump the checkpoint version in `src/lib/review-checkpoints.ts` when changing request semantics or output-validation rules that are not already represented by those inputs.
+
+Only validated, redacted findings and summaries, warnings, token counts and the model name are stored. Raw requests, full source snapshots, provider responses and reasoning text are not saved. Cached findings are validated against the current input again before reuse; invalid records are removed and regenerated. Checkpoints have the same sensitivity as stored review findings and remain until their run is deleted, when the foreign key deletes them too. Automatic retention is not implemented.
+
+Access, current-revision checks, scanner execution and source retrieval still run on retry. A checkpoint never bypasses payment, repository authorization or publication checks. A saved final result still follows the existing publication reconciliation path, so retries do not duplicate charges or GitHub output.
+
+Cache hits make no inference request, reserve no tokens and create no new model-usage row. Billing continues to absorb failed attempts; on a resumed successful run, only fresh validated calls in that attempt can be billed. The run's displayed token total describes the logical review including reused batches, while Billing shows customer usage charged by the ledger. Provider-capacity totals retain all actual/unknown calls from all attempts without counting reuse as a new call.
+
+This resumes **completed batches**, not an unfinished model response. A process crash between receiving a response and saving its checkpoint can require that call again. A repeatedly failing batch can still need model/configuration changes or a smaller PR. Changing models deliberately invalidates prior checkpoints. No results can be recovered retroactively from runs performed before checkpointing was installed.
+
+Validation uses a disposable PostgreSQL database and mocked model calls. `tests/review-checkpoints.integration.test.ts` covers partial failure followed by resume, usage charged only once for fresh work, isolation between runs, changed inputs, corrupt stored results, and current-authorization/payment checks.

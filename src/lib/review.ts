@@ -5,6 +5,7 @@ import type { Finding, SourceFile } from "./types";
 import { loadReviewSkills } from "./review-skills";
 import { ModelReviewError, readModelResponse } from "./model-response";
 import { reserveModelCall, recordModelUsage, finishModelCall } from "./billing";
+import { checkpointBatch } from "./review-checkpoints";
 export { ModelReviewError } from "./model-response";
 import { ReviewOrchestrator, type ReviewPhase } from "./review-orchestrator";
 
@@ -147,7 +148,9 @@ export async function modelReview(
   if (!batches.length)
     throw new ModelReviewError("No files available for model review.");
   const orchestrator = options.orchestrator || new ReviewOrchestrator();
-  let results: Awaited<ReturnType<typeof reviewBatch>>[];
+  let results: (Awaited<ReturnType<typeof reviewBatch>> & {
+    reused: boolean;
+  })[];
   try {
     const settled = await Promise.allSettled(
       batches.map((batch, index) =>
@@ -155,15 +158,34 @@ export async function modelReview(
           await options.beforeBatch?.(index + 1, batches.length);
           signal.throwIfAborted();
           const paths = new Set(batch.map((file) => file.path));
-          return reviewBatch(
-            batch,
-            scannerFindings.filter((f) => paths.has(f.path)),
-            {
-              instructions,
-              candidates: options.candidates?.filter((f) => paths.has(f.path)),
-              signal,
-            },
+          const scopedFindings = scannerFindings.filter((f) =>
+            paths.has(f.path),
           );
+          const candidates = options.candidates?.filter((f) =>
+            paths.has(f.path),
+          );
+          const saved = await checkpointBatch(
+            options.phase || "Review",
+            {
+              files: batch,
+              scannerFindings: scopedFindings,
+              candidates,
+              instructions,
+              model: required("NAN_MODEL"),
+              fallback: process.env.NAN_FALLBACK_MODEL?.trim() || null,
+              endpoint:
+                process.env.NAN_BASE_URL || "https://api.nan.builders/v1",
+              maxOutputTokens: limits.modelOutputTokens,
+            },
+            () =>
+              reviewBatch(batch, scopedFindings, {
+                instructions,
+                candidates,
+                signal,
+              }),
+            (value) => validateCheckpoint(value, batch),
+          );
+          return { ...saved.result, reused: saved.reused };
         }),
       ),
     );
@@ -171,8 +193,11 @@ export async function modelReview(
     if (failure) throw orchestrator.signal.reason || failure.reason;
     results = settled.map(
       (r) =>
-        (r as PromiseFulfilledResult<Awaited<ReturnType<typeof reviewBatch>>>)
-          .value,
+        (
+          r as PromiseFulfilledResult<
+            Awaited<ReturnType<typeof reviewBatch>> & { reused: boolean }
+          >
+        ).value,
     );
   } finally {
     if (!options.orchestrator) await orchestrator.close();
@@ -204,7 +229,36 @@ export async function modelReview(
     model: [...new Set(results.map((r) => r.model))].join(", "),
     skills: skills.versions,
     batches: batches.length,
+    resumedBatches: results.filter((r) => r.reused).length,
   };
+}
+
+const checkpointSchema = z
+  .object({
+    summary: z.string().min(1).max(3000),
+    findings: z
+      .array(findingSchema.extend({ source: z.literal("ai") }))
+      .max(limits.findings),
+    warnings: z.array(z.string().max(2000)).max(100),
+    tokens: z.number().int().nonnegative().safe(),
+    model: z.string().min(1).max(300),
+  })
+  .strict();
+
+function validateCheckpoint(value: unknown, files: SourceFile[]) {
+  const parsed = checkpointSchema.parse(value);
+  const checked = validateFindings(
+    {
+      summary: parsed.summary,
+      findings: parsed.findings.map(
+        ({ source: _source, ...finding }) => finding,
+      ),
+    },
+    files,
+  );
+  if (checked.findings.length !== parsed.findings.length)
+    throw new Error("Checkpoint evidence no longer validates");
+  return { ...parsed, ...checked, warnings: parsed.warnings };
 }
 
 class ModelReasoningLimitError extends ModelReviewError {}

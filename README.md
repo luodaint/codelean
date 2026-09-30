@@ -16,6 +16,7 @@ A self-hosted GitHub PR reviewer with a Next.js admin, PostgreSQL queue, Semgrep
 - A Simplify review adapter for concrete reuse, clarity, and efficiency improvements in the ordinary AI review. Skills are selected by review phase and their versions are retained in each run.
 - GitHub check progress, an updated summary comment, up to five inline AI comments, and optional status labels.
 - Run history, findings, retry controls, worker status and usage statistics.
+- [Resumable review batches](docs/resumable-reviews.md): completed work survives failures and worker restarts, so retries reuse matching results.
 - Source-built Docker images, Compose/Dokploy configuration, migrations, health checks, and installation/backup instructions.
 
 Reviews are **advisory**: no auto-approval, requests for changes, merges, dependency installation, or execution of repository test suites in this version. Those need their own policies and a stronger execution sandbox. Existing CI results are not yet aggregated.
