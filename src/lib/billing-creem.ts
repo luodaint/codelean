@@ -40,14 +40,14 @@ export async function verifyBillingProducts() {
   ]);
   const price = plan.usage_prices?.[0];
   if (
-    plan.price !== 1000 ||
+    plan.price !== pricing.monthlyCents ||
     plan.currency !== "USD" ||
     plan.billing_type !== "recurring" ||
     plan.billing_period !== "every-month" ||
     plan.trial_period_days ||
     plan.usage_prices?.length !== 1 ||
     price?.meter_id !== required("CREEM_METER_ID") ||
-    Number(price.unit_price) !== 0.00005 ||
+    Number(price.unit_price) !== 1 / Number(pricing.tokensPerCent) ||
     price.free_allowance !== 0 ||
     price.settlement_mode !== "postpaid" ||
     price.cap != null
@@ -56,7 +56,7 @@ export async function verifyBillingProducts() {
       "Creem plan does not match the approved metered price. Run billing:setup and verify postpaid support.",
     );
   if (
-    pack.price !== 500 ||
+    pack.price !== pricing.packCents ||
     pack.currency !== "USD" ||
     pack.billing_type !== "onetime" ||
     pack.features?.length
@@ -119,13 +119,44 @@ export async function createBillingCheckout(
     // Reuse a pending session: double-clicking Subscribe must not create two plans.
     const pending = (
       await c.query(
-        "SELECT * FROM billing_checkouts WHERE organization_id=$1 AND kind=$2 AND completed_at IS NULL ORDER BY created_at DESC LIMIT 1",
+        "SELECT * FROM billing_checkouts WHERE organization_id=$1 AND kind=$2 AND completed_at IS NULL AND expired_at IS NULL ORDER BY created_at DESC LIMIT 1",
         [organizationId, kind],
       )
     ).rows[0];
-    if (pending?.checkout_url) return creemRedirect(pending.checkout_url);
-    if (pending)
-      throw new Error("A checkout is awaiting provider reconciliation.");
+    if (pending) {
+      if (!pending.checkout_id)
+        throw new Error("A checkout is awaiting provider reconciliation.");
+      const remote = await creemRequest<{
+        id: string;
+        status: string;
+        customer: unknown;
+        product: unknown;
+        request_id: string;
+      }>(`/checkouts?checkout_id=${encodeURIComponent(pending.checkout_id)}`);
+      if (
+        remote.id !== pending.checkout_id ||
+        remote.request_id !== pending.id ||
+        objectId(remote.customer) !== customerId ||
+        objectId(remote.product) !==
+          required(
+            kind === "plan"
+              ? "CREEM_PLAN_PRODUCT_ID"
+              : "CREEM_TOKEN_PRODUCT_ID",
+          )
+      )
+        throw new Error("Checkout binding mismatch");
+      if (remote.status === "expired") {
+        // Provider confirmation, never local age, makes replacement safe.
+        await c.query(
+          "UPDATE billing_checkouts SET expired_at=now() WHERE id=$1",
+          [pending.id],
+        );
+      } else if (remote.status === "pending" && pending.checkout_url) {
+        return creemRedirect(pending.checkout_url);
+      } else {
+        throw new Error("A checkout is awaiting provider reconciliation.");
+      }
+    }
     const id = randomUUID();
     await c.query(
       "INSERT INTO billing_checkouts(id,organization_id,kind,customer_id) VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING",
@@ -185,6 +216,25 @@ export async function syncSubscription(subscription: CreemSubscription) {
     ).rows[0];
     if (!row) throw new Error("Unknown billing customer");
     const b = await billingAccount(row.organization_id, c);
+    const updated = validDate(subscription.updated_at);
+    if (!updated) throw new Error("Subscription is missing its revision date");
+    if (
+      b.subscription_id !== subscription.id &&
+      (
+        await c.query(
+          "SELECT 1 FROM billing_subscription_history WHERE subscription_id=$1 AND organization_id=$2",
+          [subscription.id, row.organization_id],
+        )
+      ).rowCount
+    )
+      return;
+    const newer = (
+      await c.query(
+        "SELECT 1 FROM billing_accounts WHERE organization_id=$1 AND provider_updated_at>$2",
+        [row.organization_id, updated],
+      )
+    ).rowCount;
+    if (newer) return;
     if (
       b.subscription_id &&
       b.subscription_id !== subscription.id &&
@@ -196,15 +246,15 @@ export async function syncSubscription(subscription: CreemSubscription) {
       );
       return;
     }
-    const updated = validDate(subscription.updated_at);
-    if (!updated) throw new Error("Subscription is missing its revision date");
-    const newer = (
+    if (b.subscription_id)
       await c.query(
-        "SELECT 1 FROM billing_accounts WHERE organization_id=$1 AND subscription_id=$2 AND provider_updated_at>$3",
-        [row.organization_id, subscription.id, updated],
-      )
-    ).rowCount;
-    if (newer) return;
+        "INSERT INTO billing_subscription_history(subscription_id,organization_id) VALUES($1,$2) ON CONFLICT DO NOTHING",
+        [b.subscription_id, row.organization_id],
+      );
+    await c.query(
+      "INSERT INTO billing_subscription_history(subscription_id,organization_id) VALUES($1,$2) ON CONFLICT DO NOTHING",
+      [subscription.id, row.organization_id],
+    );
     await c.query(
       "UPDATE billing_accounts SET subscription_id=$2,subscription_status=$3,provider_updated_at=$4 WHERE organization_id=$1",
       [row.organization_id, subscription.id, subscription.status, updated],

@@ -1,3 +1,4 @@
+import { completeComplimentaryGrant } from "../src/lib/billing-grants";
 import { db } from "../src/lib/db";
 import { creemRequest } from "../src/lib/creem";
 import {
@@ -6,6 +7,21 @@ import {
   refreshBillingSubscription,
 } from "../src/lib/billing-creem";
 try {
+  const grants = (
+    await db().query(
+      "SELECT organization_id FROM billing_accounts WHERE grant_pending IS NOT NULL",
+    )
+  ).rows;
+  for (const grant of grants) {
+    try {
+      await completeComplimentaryGrant(grant.organization_id);
+    } catch {
+      console.error(
+        `Complimentary grant reconciliation failed for workspace ${grant.organization_id}`,
+      );
+      process.exitCode = 1;
+    }
+  }
   const accounts = (
     await db().query(
       "SELECT organization_id FROM billing_accounts WHERE subscription_id IS NOT NULL",
@@ -23,7 +39,7 @@ try {
   }
   const checkouts = (
     await db().query(
-      "SELECT checkout_id FROM billing_checkouts WHERE completed_at IS NULL AND checkout_id IS NOT NULL",
+      "SELECT checkout_id FROM billing_checkouts WHERE completed_at IS NULL AND expired_at IS NULL AND checkout_id IS NOT NULL",
     )
   ).rows;
   for (const row of checkouts) {
@@ -31,6 +47,11 @@ try {
       const checkout = await creemRequest<{ status: string }>(
         `/checkouts?checkout_id=${encodeURIComponent(row.checkout_id)}`,
       );
+      if (checkout.status === "expired")
+        await db().query(
+          "UPDATE billing_checkouts SET expired_at=now() WHERE checkout_id=$1 AND completed_at IS NULL",
+          [row.checkout_id],
+        );
       if (checkout.status === "completed")
         await handleCreemEvent({
           id: `reconcile-${row.checkout_id}`,

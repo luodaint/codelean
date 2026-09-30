@@ -38,6 +38,7 @@ Edit these values in the new `.env`:
 APP_URL=http://localhost:3100
 SIGNUP_MODE=open
 DEV_AUTH_BYPASS=true
+BILLING_ENABLED=false
 ```
 
 Setup generates credentials and the local database URL; keep those generated values. If `.env` already exists, skip `npm run setup` and update that file instead. SMTP, GitHub and NaN credentials can remain empty while exploring the admin locally.

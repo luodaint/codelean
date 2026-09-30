@@ -16,7 +16,6 @@ x-billing: &billing
   BILLING_ENABLED: ${BILLING_ENABLED:-true}
   CREEM_TEST_MODE: ${CREEM_TEST_MODE:-true}
   CREEM_API_KEY: ${CREEM_API_KEY:-}
-  CREEM_WEBHOOK_SECRET: ${CREEM_WEBHOOK_SECRET:-}
   CREEM_PLAN_PRODUCT_ID: ${CREEM_PLAN_PRODUCT_ID:-}
   CREEM_TOKEN_PRODUCT_ID: ${CREEM_TOKEN_PRODUCT_ID:-}
   CREEM_METER_ID: ${CREEM_METER_ID:-}
@@ -58,6 +57,7 @@ services:
     build: { context: ., target: web }
     environment:
       <<: [*database, *auth, *github, *billing]
+      CREEM_WEBHOOK_SECRET: ${CREEM_WEBHOOK_SECRET:-}
       GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
       GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
       SMTP_HOST: ${SMTP_HOST:-}

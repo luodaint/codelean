@@ -28,8 +28,11 @@ import {
 } from "../src/lib/billing-creem";
 import { planDefinition } from "../src/lib/creem";
 import { updateAccess } from "../src/app/super-admin/actions";
+import { retryRun } from "../src/app/actions";
+import { requireWorkspace } from "../src/lib/auth";
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("../src/lib/auth", () => ({
+  requireWorkspace: vi.fn(),
   requireMutation: vi
     .fn()
     .mockResolvedValue({ user: { id: "operator", githubId: "1257083" } }),
@@ -67,6 +70,9 @@ suite("billing PostgreSQL integration", () => {
     vi.stubEnv("CREEM_METER_ID", "mtr_test");
     vi.stubEnv("CREEM_TEST_MODE", "true");
     organizationId = `billing-${randomUUID()}`;
+    vi.mocked(requireWorkspace).mockResolvedValue({
+      workspace: { id: organizationId },
+    } as Awaited<ReturnType<typeof requireWorkspace>>);
     repositoryId = ++serial;
     customerId = `cust_${randomUUID()}`;
     await db().query(
@@ -109,6 +115,7 @@ suite("billing PostgreSQL integration", () => {
       "billing_checkouts",
       "billing_outbox",
       "billing_periods",
+      "billing_subscription_history",
       "billing_accounts",
     ])
       await db().query(`DELETE FROM ${table} WHERE organization_id=$1`, [
@@ -417,6 +424,179 @@ suite("billing PostgreSQL integration", () => {
           [organizationId],
         )
       ).rowCount,
+    ).toBe(1);
+  });
+  it("replaces only provider-confirmed expired checkout sessions", async () => {
+    const pendingId = randomUUID();
+    await db().query(
+      "INSERT INTO billing_checkouts(id,organization_id,kind,customer_id,checkout_id,checkout_url) VALUES($1,$2,'tokens',$3,'ch_old','https://creem.io/old')",
+      [pendingId, organizationId, customerId],
+    );
+    let newRequest = "";
+    const fetcher = vi.fn(async (url: string, options?: RequestInit) => {
+      if (url.endsWith("/products/prod_plan"))
+        return Response.json(planDefinition("mtr_test"));
+      if (url.endsWith("/products/prod_tokens"))
+        return Response.json({
+          price: 500,
+          currency: "USD",
+          billing_type: "onetime",
+        });
+      if (url.endsWith("checkout_id=ch_old"))
+        return Response.json({
+          id: "ch_old",
+          status: "expired",
+          request_id: pendingId,
+          customer: customerId,
+          product: "prod_tokens",
+        });
+      if (url.endsWith("checkout_id=ch_new"))
+        return Response.json({
+          id: "ch_new",
+          status: "pending",
+          request_id: newRequest,
+          customer: customerId,
+          product: "prod_tokens",
+        });
+      if (url.endsWith("/checkouts")) {
+        newRequest = JSON.parse(options!.body as string).request_id;
+        return Response.json({
+          id: "ch_new",
+          checkout_url: "https://creem.io/new",
+        });
+      }
+      throw new Error("Unexpected call");
+    });
+    vi.stubGlobal("fetch", fetcher);
+    expect(
+      await Promise.all(
+        [1, 2].map(() =>
+          createBillingCheckout(
+            organizationId,
+            "owner@example.test",
+            "Test",
+            "tokens",
+          ),
+        ),
+      ),
+    ).toEqual(["https://creem.io/new", "https://creem.io/new"]);
+    expect(
+      fetcher.mock.calls.filter(([url]) => url.endsWith("/checkouts")),
+    ).toHaveLength(1);
+    expect(
+      (
+        await db().query(
+          "SELECT expired_at FROM billing_checkouts WHERE id=$1",
+          [pendingId],
+        )
+      ).rows[0].expired_at,
+    ).not.toBeNull();
+  });
+  it("ignores late events for a replaced subscription even with a newer timestamp", async () => {
+    const oldId = `sub_${organizationId}`;
+    const shared = { customer: customerId, product: "prod_plan" };
+    await syncSubscription({
+      ...shared,
+      id: oldId,
+      status: "canceled",
+      updated_at: "2026-01-01T00:00:00Z",
+    });
+    await syncSubscription({
+      ...shared,
+      id: "sub_new_" + organizationId,
+      status: "active",
+      updated_at: "2026-02-01T00:00:00Z",
+    });
+    await syncSubscription({
+      ...shared,
+      id: oldId,
+      status: "canceled",
+      updated_at: "2026-03-01T00:00:00Z",
+    });
+    expect(await billingAccount(organizationId)).toMatchObject({
+      subscription_id: "sub_new_" + organizationId,
+      subscription_status: "active",
+      hold_reason: null,
+    });
+  });
+  it("serializes concurrent retry requests at the workspace queue cap", async () => {
+    await db().query("UPDATE runs SET status='failed' WHERE id=$1", [run.id]);
+    const second = randomUUID();
+    await db().query(
+      "INSERT INTO runs(id,repository_id,pr_number,title,head_sha,base_sha,status) VALUES($1,$2,2,'Retry',$3,$4,'failed')",
+      [second, repositoryId, run.head_sha, run.base_sha],
+    );
+    await db().query(
+      "INSERT INTO runs(id,repository_id,pr_number,title,head_sha,base_sha) SELECT gen_random_uuid(),$1,n,'Queued',$2,$3 FROM generate_series(3,11) n",
+      [repositoryId, run.head_sha, run.base_sha],
+    );
+    const retry = (id: string) => {
+      const f = new FormData();
+      f.set("id", id);
+      return retryRun(f);
+    };
+    const results = await Promise.allSettled([retry(run.id), retry(second)]);
+    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+    expect(
+      (
+        await db().query(
+          "SELECT count(*)::int AS n FROM runs WHERE repository_id=$1 AND status='queued'",
+          [repositoryId],
+        )
+      ).rows[0].n,
+    ).toBe(10);
+    // A stale form for an already queued run must be harmless, even at capacity.
+    const queued = (
+      await db().query(
+        "SELECT id FROM runs WHERE repository_id=$1 AND status='queued' LIMIT 1",
+        [repositoryId],
+      )
+    ).rows[0].id;
+    await expect(retry(queued)).resolves.toBeUndefined();
+  });
+  it("recovers a complimentary grant after cancellation succeeds but the local commit fails", async () => {
+    let remoteStatus = "active";
+    const fetcher = vi.fn(async (_url: string, options?: RequestInit) => {
+      if (options?.method === "POST") remoteStatus = "canceled";
+      return Response.json({ status: remoteStatus });
+    });
+    vi.stubGlobal("fetch", fetcher);
+    const form = new FormData();
+    form.set("organizationId", organizationId);
+    form.set("action", "grant");
+    form.set("reason", "Simulate final commit failure");
+    await db().query(
+      "ALTER TABLE billing_audit ADD CONSTRAINT test_reject_grant CHECK (reason <> 'Simulate final commit failure')",
+    );
+    try {
+      await expect(updateAccess(form)).rejects.toThrow();
+    } finally {
+      await db().query(
+        "ALTER TABLE billing_audit DROP CONSTRAINT test_reject_grant",
+      );
+    }
+    expect(remoteStatus).toBe("canceled");
+    expect((await billingAccount(organizationId)).grant_pending).not.toBeNull();
+    await expect(assertReviewAccess(organizationId)).rejects.toThrow(
+      "cancellation confirmation",
+    );
+    await updateAccess(form);
+    expect(await billingAccount(organizationId)).toMatchObject({
+      complimentary: true,
+      grant_pending: null,
+      hold_reason: null,
+      subscription_status: "canceled",
+    });
+    expect(
+      fetcher.mock.calls.filter(([, options]) => options?.method === "POST"),
+    ).toHaveLength(1);
+    expect(
+      (
+        await db().query(
+          "SELECT count(*)::int AS n FROM billing_audit WHERE organization_id=$1",
+          [organizationId],
+        )
+      ).rows[0].n,
     ).toBe(1);
   });
   it("confirms provider cancellation before granting free access and audits the change", async () => {

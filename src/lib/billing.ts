@@ -26,12 +26,26 @@ export type BillingAccount = {
   owner_exempt: boolean;
   paused: boolean;
   hold_reason: string | null;
+  grant_pending: {
+    id: string;
+    subscriptionId: string | null;
+    actorId: string;
+    reason: string;
+    until: string | null;
+    before: unknown;
+  } | null;
   repository_limit: number;
   hourly_limit: number;
   included_used: string;
   overage_tokens: string;
   reserved_tokens: string;
 };
+const billingProjection = `SELECT b.*,
+    EXISTS(SELECT 1 FROM member m JOIN "user" u ON u.id=m."userId" WHERE m."organizationId"=b.organization_id AND m.role='owner' AND u."githubId"=$2 AND u."emailVerified"=true) AS owner_exempt,
+    COALESCE(p.included_used,0)::text AS included_used, COALESCE(p.overage_tokens,0)::text AS overage_tokens,
+    COALESCE((SELECT sum(u.reserved_tokens) FROM model_usage u JOIN billing_attempts a ON a.id=u.attempt_id WHERE a.organization_id=b.organization_id AND a.state='running' AND NOT a.exempt),0)::text AS reserved_tokens
+    FROM billing_accounts b LEFT JOIN billing_periods p ON p.organization_id=b.organization_id AND p.starts_at=b.period_start WHERE b.organization_id=ANY($1::text[])`;
+
 export async function billingAccount(
   organizationId: string,
   client?: PoolClient,
@@ -47,15 +61,26 @@ export async function billingAccount(
       [organizationId],
     );
   return (
-    await c.query<BillingAccount>(
-      `SELECT b.*,
-    EXISTS(SELECT 1 FROM member m JOIN "user" u ON u.id=m."userId" WHERE m."organizationId"=b.organization_id AND m.role='owner' AND u."githubId"=$2 AND u."emailVerified"=true) AS owner_exempt,
-    COALESCE(p.included_used,0)::text AS included_used, COALESCE(p.overage_tokens,0)::text AS overage_tokens,
-    COALESCE((SELECT sum(u.reserved_tokens) FROM model_usage u JOIN billing_attempts a ON a.id=u.attempt_id WHERE a.organization_id=b.organization_id AND a.state='running' AND NOT a.exempt),0)::text AS reserved_tokens
-    FROM billing_accounts b LEFT JOIN billing_periods p ON p.organization_id=b.organization_id AND p.starts_at=b.period_start WHERE b.organization_id=$1`,
-      [organizationId, ownerGitHubId],
-    )
+    await c.query<BillingAccount>(billingProjection, [
+      [organizationId],
+      ownerGitHubId,
+    ])
   ).rows[0];
+}
+export async function billingAccounts(organizationIds: string[]) {
+  if (!organizationIds.length) return [];
+  await db().query(
+    "INSERT INTO billing_accounts(organization_id) SELECT unnest($1::text[]) ON CONFLICT DO NOTHING",
+    [organizationIds],
+  );
+  const rows = (
+    await db().query<BillingAccount>(billingProjection, [
+      organizationIds,
+      ownerGitHubId,
+    ])
+  ).rows;
+  const byId = new Map(rows.map((row) => [row.organization_id, row]));
+  return organizationIds.map((id) => byId.get(id)!);
 }
 export function complimentary(account: BillingAccount) {
   return (
@@ -66,6 +91,10 @@ export function complimentary(account: BillingAccount) {
   );
 }
 export function checkAccess(account: BillingAccount) {
+  if (account.grant_pending)
+    throw new BillingBlocked(
+      "Complimentary access is awaiting cancellation confirmation.",
+    );
   if (account.paused)
     throw new BillingBlocked("Reviews are paused by the service owner.");
   if (complimentary(account)) return;

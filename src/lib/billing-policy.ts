@@ -62,5 +62,5 @@ export function tokenLabel(value: string | bigint) {
   return Number(value).toLocaleString("en-US");
 }
 export function usageDollars(tokens: string | bigint) {
-  return (Number(tokens) / 2_000_000).toFixed(2);
+  return (Number(tokens) / Number(pricing.tokensPerCent) / 100).toFixed(2);
 }

@@ -64,6 +64,18 @@ export async function handleEvent(
       repository,
       pull_request: pr,
     } = prEvent.parse(payload);
+    if (
+      pr.state === "closed" ||
+      pr.draft ||
+      ![
+        "opened",
+        "synchronize",
+        "reopened",
+        "ready_for_review",
+        "edited",
+      ].includes(action)
+    )
+      return "ignored";
     // Lock workspace billing before repositories, matching settings/retry actions.
     const mapping = (
       await c.query(
@@ -91,20 +103,6 @@ export async function handleEvent(
       repo.organization_id !== mapping.organization_id
     )
       return "repository disabled";
-    if (pr.state === "closed" || pr.draft) {
-      // Deliveries can arrive out of order. The worker checks authoritative PR state.
-      return "ignored";
-    }
-    if (
-      ![
-        "opened",
-        "synchronize",
-        "reopened",
-        "ready_for_review",
-        "edited",
-      ].includes(action)
-    )
-      return "ignored";
     const result = await c.query(
       `INSERT INTO runs(id, repository_id, pr_number, title, head_sha, base_sha) VALUES ($1,$2,$3,$4,$5,$6)
       ON CONFLICT(repository_id, pr_number, head_sha, base_sha) DO NOTHING RETURNING id`,
@@ -128,11 +126,13 @@ export async function handleEvent(
           [repo.organization_id],
         )
       ).rows[0].n;
-      if (queued > 10)
+      if (queued > 10) {
         await c.query(
           "UPDATE runs SET status='failed',stage='Review paused · Queue limit',error='Workspace queue is full. Retry after current reviews finish.',completed_at=now() WHERE id=$1",
           [result.rows[0].id],
         );
+        return "queue full";
+      }
     }
     return result.rowCount ? "queued" : "already reviewed";
   });

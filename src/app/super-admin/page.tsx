@@ -1,6 +1,6 @@
 import { requireOperator } from "@/lib/operator";
 import { db } from "@/lib/db";
-import { billingAccount, complimentary } from "@/lib/billing";
+import { billingAccounts, complimentary } from "@/lib/billing";
 import { tokenLabel } from "@/lib/billing-policy";
 import { Shell } from "@/components/shell";
 import { Submit } from "@/components/submit";
@@ -19,9 +19,7 @@ export default async function SuperAdmin({
       [`%${q.slice(0, 100)}%`],
     )
   ).rows;
-  const accounts = await Promise.all(
-    workspaces.map((w) => billingAccount(w.id)),
-  );
+  const accounts = await billingAccounts(workspaces.map((w) => w.id));
   const usage = (
     await db().query(
       "SELECT COALESCE(sum(COALESCE(total_tokens,max_tokens)),0)::text AS tokens,count(*) FILTER(WHERE total_tokens IS NULL)::int AS unknown FROM model_usage WHERE created_at>=COALESCE($1::timestamptz,date_trunc('month',now()))",

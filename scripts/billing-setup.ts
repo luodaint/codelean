@@ -17,6 +17,10 @@ if (!process.argv.includes("--apply")) {
     ),
   );
 } else {
+  if (!["true", "false"].includes(process.env.CREEM_TEST_MODE || ""))
+    throw new Error(
+      "Set CREEM_TEST_MODE explicitly to true or false before setup",
+    );
   if (live && !process.argv.includes("--live"))
     throw new Error("Live setup requires --live");
   await mkdir("artifacts", { recursive: true });

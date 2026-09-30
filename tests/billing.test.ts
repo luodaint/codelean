@@ -54,6 +54,8 @@ describe("billing policy and Creem contract", () => {
       meter_id: "mtr_test",
     });
     expect(plan.usage_prices[0].unit_price * 1_000_000).toBe(50);
+    // Creem documents minor currency units, so convert cents to dollars.
+    expect((plan.usage_prices[0].unit_price * 1_000_000) / 100).toBe(0.5);
   });
   it("authenticates the exact webhook bytes", () => {
     const raw = '{"id":"event"}';

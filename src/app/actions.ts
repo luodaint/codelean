@@ -80,6 +80,15 @@ export async function retryRun(form: FormData) {
   const id = z.uuid().parse(form.get("id"));
   await transaction(async (c) => {
     await assertReviewAccess(workspace.id, c);
+    // assertReviewAccess locks the workspace billing row before this count.
+    // Only a retry that can actually transition to queued consumes a slot.
+    const eligible = (
+      await c.query(
+        "SELECT r.id FROM runs r JOIN repositories p ON p.id=r.repository_id WHERE r.id=$1 AND r.status IN ('failed','cancelled') AND p.organization_id=$2 AND p.enabled AND p.connected FOR UPDATE OF r",
+        [id, workspace.id],
+      )
+    ).rowCount;
+    if (!eligible) return;
     if (billingEnabled()) {
       const queued = (
         await c.query(

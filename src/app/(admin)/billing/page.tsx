@@ -1,6 +1,11 @@
 import { requireWorkspace } from "@/lib/auth";
 import { billingAccount, complimentary } from "@/lib/billing";
-import { billingEnabled, tokenLabel, usageDollars } from "@/lib/billing-policy";
+import {
+  billingEnabled,
+  pricing,
+  tokenLabel,
+  usageDollars,
+} from "@/lib/billing-policy";
 import { creemConfigured } from "@/lib/creem";
 import { Submit } from "@/components/submit";
 import {
@@ -136,7 +141,9 @@ export default async function Billing({
         <h2>This billing period</h2>
         <dl className="policy-list">
           <dt>Included tokens used</dt>
-          <dd>{tokenLabel(b.included_used)} / 20,000,000</dd>
+          <dd>
+            {tokenLabel(b.included_used)} / {tokenLabel(pricing.includedTokens)}
+          </dd>
           <dt>Purchased tokens available</dt>
           <dd>{tokenLabel(b.prepaid_tokens)}</dd>
           <dt>Additional metered usage</dt>
@@ -147,22 +154,23 @@ export default async function Billing({
           <dt>Reserved for current reviews</dt>
           <dd>{tokenLabel(b.reserved_tokens)} tokens</dd>
           <dt>Enabled repository limit</dt>
-          <dd>{b.repository_limit}</dd>
+          <dd>{b.owner_exempt ? "No plan limit" : b.repository_limit}</dd>
           <dt>Review start limit</dt>
           <dd>{b.hourly_limit} per hour</dd>
         </dl>
-        {BigInt(b.included_used) >= 16_000_000n && !free && (
-          <p className="notice">
-            {BigInt(b.included_used) >= 20_000_000n
-              ? "Included allowance used. Reviews now use purchased tokens, then metered overage."
-              : "You have used at least 80% of your included tokens."}
-          </p>
-        )}
+        {BigInt(b.included_used) * 5n >= pricing.includedTokens * 4n &&
+          !free && (
+            <p className="notice">
+              {BigInt(b.included_used) >= pricing.includedTokens
+                ? "Included allowance used. Reviews now use purchased tokens, then metered overage."
+                : "You have used at least 80% of your included tokens."}
+            </p>
+          )}
         {!free &&
           b.extra_limit_cents !== null &&
           BigInt(b.extra_limit_cents) > 0n &&
           BigInt(b.overage_tokens) * 5n >=
-            BigInt(b.extra_limit_cents) * 20_000n * 4n && (
+            BigInt(b.extra_limit_cents) * pricing.tokensPerCent * 4n && (
             <p className="notice">
               Your additional usage is at or above 80% of your spending limit.
               New work pauses before it would exceed the limit.

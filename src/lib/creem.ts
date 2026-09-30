@@ -97,7 +97,8 @@ export function planDefinition(meterId: string) {
     usage_prices: [
       {
         meter_id: meterId,
-        unit_price: 0.00005,
+        // Creem uses minor currency units: 50 cents per million tokens.
+        unit_price: 1 / Number(pricing.tokensPerCent),
         free_allowance: 0,
         settlement_mode: "postpaid",
       },

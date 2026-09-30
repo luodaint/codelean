@@ -5,7 +5,7 @@ import { requireMutation } from "@/lib/auth";
 import { requireOperator } from "@/lib/operator";
 import { billingAccount } from "@/lib/billing";
 import { transaction } from "@/lib/db";
-import { creemRequest, getSubscription } from "@/lib/creem";
+import { grantComplimentary } from "@/lib/billing-grants";
 export async function updateAccess(form: FormData) {
   await requireMutation();
   const session = await requireOperator();
@@ -14,68 +14,23 @@ export async function updateAccess(form: FormData) {
   const action = z
     .enum(["grant", "revoke", "limits", "clear-hold"])
     .parse(form.get("action"));
+  if (action === "grant") {
+    const date = String(form.get("until") || "");
+    const until = date ? z.iso.date().parse(date) + "T23:59:59.999Z" : null;
+    if (until && Date.parse(until) <= Date.now())
+      throw new Error("Expiry must be in the future.");
+    await grantComplimentary(id, session.user.id, reason, until);
+    revalidatePath("/super-admin");
+    revalidatePath("/billing");
+    return;
+  }
   await transaction(async (c) => {
     const b = await billingAccount(id, c);
-    if (action === "grant") {
-      const date = String(form.get("until") || "");
-      const until = date ? z.iso.date().parse(date) + "T23:59:59.999Z" : null;
-      if (until && Date.parse(until) <= Date.now())
-        throw new Error("Expiry must be in the future.");
-      if (
-        (
-          await c.query(
-            "SELECT 1 FROM billing_attempts WHERE organization_id=$1 AND state='running'",
-            [id],
-          )
-        ).rowCount
-      )
-        throw new Error(
-          "Wait for the current review to finish before changing billing.",
-        );
-      if (
-        (
-          await c.query(
-            "SELECT 1 FROM billing_outbox WHERE organization_id=$1 AND delivered_at IS NULL",
-            [id],
-          )
-        ).rowCount
-      )
-        throw new Error(
-          "Reconcile pending usage before making this workspace free.",
-        );
-      if (
-        (
-          await c.query(
-            "SELECT 1 FROM billing_checkouts WHERE organization_id=$1 AND kind='plan' AND completed_at IS NULL",
-            [id],
-          )
-        ).rowCount
-      )
-        throw new Error(
-          "Resolve pending subscription checkouts before granting free access.",
-        );
-      if (b.subscription_id) {
-        const current = await getSubscription(b.subscription_id);
-        if (current.status !== "canceled")
-          await creemRequest(
-            `/subscriptions/${encodeURIComponent(b.subscription_id)}/cancel`,
-            "POST",
-            { mode: "immediate" },
-          );
-        if ((await getSubscription(b.subscription_id)).status !== "canceled")
-          throw new Error(
-            "Creem has not confirmed cancellation; complimentary access was not applied.",
-          );
-        await c.query(
-          "UPDATE billing_accounts SET subscription_status='canceled' WHERE organization_id=$1",
-          [id],
-        );
-      }
-      await c.query(
-        "UPDATE billing_accounts SET complimentary=true,complimentary_until=$2 WHERE organization_id=$1",
-        [id, until],
+    if (b.grant_pending)
+      throw new Error(
+        "Finish or reconcile the pending complimentary grant first.",
       );
-    } else if (action === "revoke") {
+    if (action === "revoke") {
       if (b.owner_exempt)
         throw new Error("The owner's permanent exemption cannot be revoked.");
       await c.query(
