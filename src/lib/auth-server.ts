@@ -1,6 +1,10 @@
 import { betterAuth } from "better-auth";
-import { APIError, createAuthMiddleware } from "better-auth/api";
-import { emailOTP } from "better-auth/plugins";
+import {
+  APIError,
+  createAuthMiddleware,
+  getSessionFromCtx,
+} from "better-auth/api";
+import { emailOTP, organization } from "better-auth/plugins";
 import nodemailer from "nodemailer";
 import { githubIdentity } from "./github-identity";
 import {
@@ -10,7 +14,7 @@ import {
   emailLoginConfigured,
 } from "./config";
 import { db } from "./db";
-import { adminEmailAllowed, localOtpBypass } from "./auth-policy";
+import { signupAllowed, localOtpBypass } from "./auth-policy";
 
 export function createAuth() {
   const bypass = localOtpBypass(
@@ -60,11 +64,7 @@ export function createAuth() {
       user: {
         create: {
           before: async (user) => {
-            if (
-              !user.emailVerified ||
-              !adminEmailAllowed(user.email, process.env.ADMIN_EMAILS || "")
-            )
-              return false;
+            if (!user.emailVerified || !signupAllowed(user.email)) return false;
           },
         },
       },
@@ -77,10 +77,7 @@ export function createAuth() {
                 [session.userId],
               )
             ).rows[0];
-            if (
-              !user?.emailVerified ||
-              !adminEmailAllowed(user.email, process.env.ADMIN_EMAILS || "")
-            )
+            if (!user?.emailVerified || !signupAllowed(user.email))
               return false;
           },
         },
@@ -90,6 +87,19 @@ export function createAuth() {
     rateLimit: { enabled: true, storage: "database", window: 60, max: 30 },
     hooks: {
       before: createAuthMiddleware(async (ctx) => {
+        if (
+          ctx.path.startsWith("/organization/") ||
+          ctx.path === "/get-access-token"
+        ) {
+          const session = await getSessionFromCtx(ctx);
+          if (
+            !session?.user.emailVerified ||
+            !signupAllowed(session.user.email)
+          )
+            throw new APIError("FORBIDDEN", {
+              message: "Sign in with an authorized verified account",
+            });
+        }
         if (ctx.path === "/sign-in/social") {
           for (const key of [
             "callbackURL",
@@ -125,7 +135,9 @@ export function createAuth() {
           (ctx.path === "/callback/:id" && ctx.params?.id === "github");
         if (
           !githubRoute &&
+          !ctx.path.startsWith("/organization/") &&
           ![
+            "/get-access-token",
             "/email-otp/send-verification-otp",
             "/sign-in/email-otp",
             "/get-session",
@@ -156,10 +168,7 @@ export function createAuth() {
           throw new APIError("FORBIDDEN", {
             message: "Email sign-in is not configured",
           });
-        if (
-          ctx.body?.email &&
-          !adminEmailAllowed(ctx.body.email, process.env.ADMIN_EMAILS || "")
-        )
+        if (ctx.body?.email && !signupAllowed(ctx.body.email))
           throw new APIError("FORBIDDEN", {
             message: "This email is not authorized for this workspace",
           });
@@ -180,6 +189,14 @@ export function createAuth() {
       }),
     },
     plugins: [
+      organization({
+        allowUserToCreateOrganization: (user) =>
+          user.emailVerified && Boolean(user.githubId || bypass),
+        organizationLimit: 10,
+        membershipLimit: 100,
+        requireEmailVerificationOnInvitation: true,
+        disableOrganizationDeletion: true,
+      }),
       emailOTP({
         otpLength: 6,
         expiresIn: 300,
@@ -187,8 +204,7 @@ export function createAuth() {
         storeOTP: "hashed",
         ...(bypass ? { generateOTP: () => "000000" } : {}),
         async sendVerificationOTP({ email, otp }) {
-          if (!adminEmailAllowed(email, process.env.ADMIN_EMAILS || ""))
-            throw new Error("Email not authorized");
+          if (!signupAllowed(email)) throw new Error("Email not authorized");
           if (bypass) return;
           const smtp = nodemailer.createTransport({
             host: required("SMTP_HOST"),

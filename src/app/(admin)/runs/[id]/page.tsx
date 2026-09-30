@@ -1,3 +1,5 @@
+import { requireWorkspace } from "@/lib/auth";
+import { canManage } from "@/lib/workspaces";
 import Link from "next/link";
 import { ArrowLeft, ArrowUpRight, FileCode2, ShieldCheck } from "lucide-react";
 import { notFound } from "next/navigation";
@@ -11,6 +13,7 @@ export default async function RunPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const { workspace } = await requireWorkspace();
   const run = await runDetails((await params).id);
   if (!run) notFound();
   return (
@@ -49,14 +52,15 @@ export default async function RunPage({
       {run.error && (
         <div className="notice danger">
           <p>{run.error}</p>
-          {["failed", "cancelled"].includes(run.status) && (
-            <form action={retryRun}>
-              <input type="hidden" name="id" value={run.id} />
-              <Submit className="button secondary" pending="Queuing…">
-                Retry this revision
-              </Submit>
-            </form>
-          )}
+          {canManage(workspace) &&
+            ["failed", "cancelled"].includes(run.status) && (
+              <form action={retryRun}>
+                <input type="hidden" name="id" value={run.id} />
+                <Submit className="button secondary" pending="Queuing…">
+                  Retry this revision
+                </Submit>
+              </form>
+            )}
         </div>
       )}
       {run.result ? (

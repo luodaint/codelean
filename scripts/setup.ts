@@ -20,5 +20,5 @@ template = template.replace(
 );
 await writeFile(".env", template, { mode: 0o600, flag: "wx" });
 console.log(
-  "Created .env with restricted permissions. Fill in APP_URL, ADMIN_EMAILS, GitHub App credentials (including GITHUB_CLIENT_ID/GITHUB_CLIENT_SECRET), and NAN_API_KEY/NAN_MODEL. SMTP is optional for email-code fallback. Existing files are never overwritten.",
+  "Created .env with restricted permissions. Fill in APP_URL, GitHub App credentials (including GITHUB_CLIENT_ID/GITHUB_CLIENT_SECRET), and NAN_API_KEY/NAN_MODEL. Signup is open by default; SIGNUP_MODE=restricted with ADMIN_EMAILS is optional for private pilots. SMTP is optional for email-code fallback. Existing files are never overwritten.",
 );

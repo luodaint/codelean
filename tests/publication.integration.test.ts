@@ -114,7 +114,11 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
       vi.stubEnv("GITHUB_APP_SLUG", "codelean-test");
       vi.stubEnv("APP_URL", "http://localhost:3100");
       await db().query(
-        "INSERT INTO repositories(id,installation_id,full_name,enabled) VALUES($1,$2,$3,true)",
+        "INSERT INTO installations(id,organization_id) VALUES($1,'codelean-legacy')",
+        [repo.installation_id],
+      );
+      await db().query(
+        "INSERT INTO repositories(id,installation_id,full_name,enabled,organization_id) VALUES($1,$2,$3,true,'codelean-legacy')",
         [repo.id, repo.installation_id, repo.full_name],
       );
       run = (
@@ -129,6 +133,9 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
         repositoryId,
       ]);
       await db().query("DELETE FROM repositories WHERE id=$1", [repositoryId]);
+      await db().query("DELETE FROM installations WHERE id=$1", [
+        repo.installation_id,
+      ]);
       await db().end();
       vi.unstubAllEnvs();
     });

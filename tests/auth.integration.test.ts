@@ -10,6 +10,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
   () => {
     beforeAll(() => {
       vi.stubEnv("DATABASE_URL", process.env.TEST_DATABASE_URL!);
+      vi.stubEnv("SIGNUP_MODE", "restricted");
       vi.stubEnv("APP_URL", "http://localhost:3100");
       vi.stubEnv(
         "ADMIN_EMAILS",

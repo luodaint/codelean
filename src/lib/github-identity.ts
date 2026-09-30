@@ -1,6 +1,6 @@
 import type { GithubProfile } from "better-auth/social-providers";
 import { z } from "zod";
-import { adminEmailAllowed } from "./auth-policy";
+import { signupAllowed } from "./auth-policy";
 
 const profileSchema = z.object({
   id: z.number().int().positive().safe(),
@@ -17,7 +17,7 @@ const emailsSchema = z.array(
 );
 
 // The library owns OAuth state, PKCE and token exchange. This adapter validates
-// identity and workspace eligibility using GitHub's authenticated API responses.
+// identity and signup eligibility using GitHub's authenticated API responses.
 export async function githubIdentity(token: { accessToken?: string }) {
   if (!token.accessToken) return null;
   try {
@@ -37,11 +37,7 @@ export async function githubIdentity(token: { accessToken?: string }) {
     const rawProfile = await profileResponse.json();
     const profile = profileSchema.parse(rawProfile);
     const emails = emailsSchema.parse(await emailResponse.json());
-    const eligible = emails.filter(
-      (e) =>
-        e.verified &&
-        adminEmailAllowed(e.email, process.env.ADMIN_EMAILS || ""),
-    );
+    const eligible = emails.filter((e) => e.verified && signupAllowed(e.email));
     const email = eligible.find((e) => e.primary)?.email ?? eligible[0]?.email;
     if (!email) return null;
     const avatar = new URL(profile.avatar_url);

@@ -1,15 +1,15 @@
 # Architecture and boundaries
 
-This is a single-workspace admin: every email in `ADMIN_EMAILS` has administrative access to every connected repository. It is not a multi-tenant SaaS. PostgreSQL holds Better Auth sessions, repositories, delivery receipts, runs, results and worker heartbeats.
+Codelean supports multiple company workspaces using Better Auth organizations, memberships, invitations and active workspace sessions. PostgreSQL holds those records alongside repositories, delivery receipts, runs, results and worker heartbeats. The operator shares infrastructure and provider credentials across companies; billing and resource fairness are not yet implemented.
 
 ## Components
 
-| Component   | Responsibility                                                   | Access                                                  |
-| ----------- | ---------------------------------------------------------------- | ------------------------------------------------------- |
-| Next.js web | Email sign-in, dashboard, repository management, webhooks        | PostgreSQL, SMTP, GitHub App credentials                |
-| Node worker | Claim jobs, fetch bounded source, call scanners and NaN, publish | PostgreSQL, GitHub App, NaN, scanner token              |
-| Scanner     | Gitleaks and four initial Semgrep rules                          | Temporary files and scanner token only; private network |
-| PostgreSQL  | Durable queue, records and sessions                              | Private backend network                                 |
+| Component   | Responsibility                                                         | Access                                                  |
+| ----------- | ---------------------------------------------------------------------- | ------------------------------------------------------- |
+| Next.js web | GitHub sign-in, workspaces, dashboard, repository management, webhooks | PostgreSQL, SMTP, GitHub App credentials                |
+| Node worker | Claim jobs, fetch bounded source, call scanners and NaN, publish       | PostgreSQL, GitHub App, NaN, scanner token              |
+| Scanner     | Gitleaks and four initial Semgrep rules                                | Temporary files and scanner token only; private network |
+| PostgreSQL  | Durable queue, records and sessions                                    | Private backend network                                 |
 
 A single worker holds a PostgreSQL advisory session lock. Jobs are transactionally claimed with `FOR UPDATE SKIP LOCKED`. Losing the lock connection stops the worker. Duplicate webhook delivery IDs and revision uniqueness constraints prevent duplicate jobs. Automatic analysis retries stop after three attempts; once publication starts, an ambiguous failure requires an explicit retry that reconciles existing GitHub objects.
 
@@ -34,15 +34,25 @@ Parsers still process attacker-controlled source. On the shared Dokploy server, 
 
 ## Authentication
 
-Better Auth owns GitHub OAuth (state, PKCE, token exchange), OTP verification and database sessions. The same GitHub App provides the client ID/secret for sign-in and installation credentials for reviews. The authenticated GitHub email API must return an allowlisted verified email; public profile email alone does not authorize access. Profile name, username, stable GitHub ID and avatar are stored, and OAuth tokens are encrypted using Better Auth. Verified email-code users can link the matching GitHub identity. Client requests cannot set GitHub identity fields. GitHub authorization is separate from App installation and does not add customer isolation.
+Better Auth owns GitHub OAuth (state, PKCE, token exchange), OTP verification and database sessions. The same GitHub App provides the client ID/secret for sign-in and installation credentials for reviews. The authenticated GitHub email API must return a verified email; public profile email alone does not authorize access. Profile name, username, stable GitHub ID and avatar are stored, and OAuth tokens are encrypted using Better Auth. Verified email-code users can link the matching GitHub identity. Client requests cannot set GitHub identity fields. GitHub authorization is separate from App installation. Workspace membership is checked against PostgreSQL on every data access and management action. Owners/admins manage repositories, retries and teammates; members read reviews and statistics.
 
-SMTP is optional for the email-code fallback. Codes are six digits, hashed at rest, valid five minutes and limited to five attempts; HTTP rate limits are database-backed. Only configured admin emails can request/sign in with a code. SMTP requires TLS. Session lifetime is 12 hours, and the email allowlist is checked at each admin data/mutation boundary.
+SMTP is optional for the email-code fallback. Codes are six digits, hashed at rest, valid five minutes and limited to five attempts; HTTP rate limits are database-backed. Signup is open by default. `SIGNUP_MODE=restricted` optionally gates signup/session access using `ADMIN_EMAILS`, without granting any workspace permissions. SMTP requires TLS. Session lifetime is 12 hours, and verified identity is checked at each authenticated data/mutation boundary.
 
 `DEV_AUTH_BYPASS=true` maps numeric input to a deterministic development OTP only when `NODE_ENV=development` and `APP_URL` is loopback. A code request is still required, and consumed codes cannot be reused. Production rejects the bypass configuration; Compose explicitly sets it false.
 
+## Workspace authorization
+
+The active workspace ID is only a selector: it must match a current membership for the authenticated user. Run lists, individual runs, repository settings, retries and statistics include the workspace constraint in SQL. Removing membership invalidates access even for an existing session. Better Auth enforces invitation email, role and membership rules. Invitations are visible in-app, without email delivery in this release.
+
+Installation discovery uses the signed-in user's GitHub token, not the global app installation list. Connecting requires the personal account owner or an active GitHub organization owner (checked using the authenticated user's organization memberships). The server rechecks workspace management membership after GitHub network requests and locks installation ownership during sync. An installation can belong to only one workspace; a composite foreign key prevents repositories from crossing that boundary. A sync only disconnects repositories within that workspace and installation. Webhooks and the worker use the stored installation/repository mapping, never a workspace ID supplied by an external caller.
+
+This is application-level tenant isolation, not PostgreSQL row-level security or dedicated infrastructure per company. The trusted operator and worker still have database-wide access. Deleted GitHub installations remain associated with their original workspace; transferring installations or historical reviews between companies is intentionally unsupported.
+
+Migration 002 keeps pre-existing repositories in an Original workspace and assigns ownership only to users already present in the old `ADMIN_EMAILS` list. Unknown/new users cannot claim legacy data. New databases have an empty inaccessible legacy workspace; it has no effect on onboarding.
+
 ## Known first-release limits
 
-- One workspace, one active worker and a basic rule set. No custom trusted policy UI, multi-model validation, approval policy, CI aggregation or repository test execution.
+- Multiple workspaces share one active worker and a basic rule set. No billing, per-company spending caps or fair scheduling. No custom trusted policy UI, multi-model validation, approval policy, CI aggregation or repository test execution.
 - Source snapshots are temporary; result evidence can contain code fragments and should be treated as private repository data. No automated retention deletion yet.
 - Token usage is recorded when returned by the provider. Cost estimates and provider model discovery are not implemented; `NAN_MODEL` must be supplied by the operator.
 - Worker and trusted publisher share a process/credentials in this version. Scanners are separated; model inference is a bounded HTTP call.

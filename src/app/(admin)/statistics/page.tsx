@@ -1,17 +1,7 @@
-import { db } from "@/lib/db";
-import { overview } from "@/lib/data";
+import { overview, statistics } from "@/lib/data";
 export default async function Statistics() {
   const data = await overview();
-  const daily = (
-    await db().query(
-      `SELECT date_trunc('day', created_at AT TIME ZONE 'UTC')::date::text AS day, count(*)::int AS count FROM runs WHERE created_at>=now()-interval '14 days' GROUP BY 1 ORDER BY 1`,
-    )
-  ).rows;
-  const timings = (
-    await db().query(
-      "SELECT round(avg(extract(epoch from completed_at-started_at)))::int AS seconds FROM runs WHERE status='completed'",
-    )
-  ).rows[0];
+  const { daily, timings } = await statistics();
   const max = Math.max(1, ...daily.map((r) => r.count));
   return (
     <>

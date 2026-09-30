@@ -14,12 +14,14 @@ export function Brand() {
 }
 export function Shell({
   children,
+  workspace,
   email,
   name,
   githubUsername,
   image,
 }: {
   children: React.ReactNode;
+  workspace?: { name: string; role: string };
   email: string;
   name?: string;
   githubUsername?: string | null;
@@ -31,13 +33,18 @@ export function Shell({
         <Link href="/" aria-label="Codelean home">
           <Brand />
         </Link>
-        <div className="workspace">
+        <Link href="/workspaces" className="workspace">
           <span className="workspace-avatar">C</span>
           <div>
-            My workspace<small>Self-hosted instance</small>
+            {workspace?.name || "Workspaces"}
+            <small>
+              {workspace
+                ? `${workspace.role} · Switch workspace`
+                : "Create or join a company"}
+            </small>
           </div>
           <span className="workspace-dot" />
-        </div>
+        </Link>
         <Navigation />
         <div className="sidebar-bottom">
           <div className="advisory">

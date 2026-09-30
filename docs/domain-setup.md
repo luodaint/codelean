@@ -5,7 +5,7 @@ The product is **Codelean**, the repository is `luodaint/codelean.dev`, and the 
 ## Production on the existing Dokploy server
 
 1. Create a dedicated Codelean Compose service from the repository following [installation.md](installation.md). Use the existing Dokploy installation.
-2. In its protected environment configuration, set `APP_URL=https://codelean.dev`, `APP_DOMAIN=codelean.dev`, and `DEV_AUTH_BYPASS=false`. Configure the allowed administrators and GitHub credentials before exposing the service.
+2. In its protected environment configuration, set `APP_URL=https://codelean.dev`, `APP_DOMAIN=codelean.dev`, and `DEV_AUTH_BYPASS=false`. Configure GitHub credentials and choose `SIGNUP_MODE=open` for self-service workspaces before exposing the service.
 3. Route `codelean.dev` to the **web** service on internal port **3000** using the supplied Dokploy override or Dokploy's Domains UI. Obtain a valid origin TLS certificate.
 4. In Cloudflare DNS, create an `A` record named `@` pointing at the verified public IPv4 address of that Dokploy server. Add `AAAA` only if IPv6 is configured and reachable. Do not use the server's Tailscale/private IP.
 5. Verify origin TLS, then use Cloudflare's proxy with **Full (strict)** SSL/TLS. If certificate issuance needs direct validation, complete that before proxying. Do not cache authenticated admin pages or `/api/*` responses with custom cache rules.
@@ -98,4 +98,4 @@ Fresh installs use the Compose project, images, database and role named `codelea
 - Use the existing role/database and Compose project when running backup commands. Take a backup before a deployment update; never remove the volume as part of the rebrand.
 - GitHub publication recognizes the previous check name and comment markers. New output uses **Codelean review** and `codelean:*` labels; when labels are enabled, old status labels are removed from the reviewed PR. Update any external rules referencing the old check name. This release still produces advisory neutral checks.
 
-The rebrand does not change the single-workspace access model or add billing/multi-tenancy.
+The app now supports self-service company workspaces; the rebrand itself does not configure billing or deploy the service. See the README for onboarding and isolation boundaries.

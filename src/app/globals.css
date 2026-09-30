@@ -1247,3 +1247,52 @@ footer {
   object-fit: cover;
   border-radius: 50%;
 }
+
+.workspace-panel {
+  padding: 24px;
+  margin-bottom: 20px;
+}
+.workspace-panel h2 {
+  margin: 0 0 12px;
+}
+.workspace-panel p {
+  color: var(--muted);
+  line-height: 1.6;
+}
+.workspace-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--line);
+}
+.workspace-row small {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted);
+}
+.workspace-form {
+  display: flex;
+  align-items: end;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin: 20px 0;
+}
+.workspace-form label {
+  display: grid;
+  gap: 8px;
+}
+.workspace-form input,
+.workspace-form select {
+  min-width: 220px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: white;
+  color: inherit;
+}
+.sidebar a.workspace {
+  color: inherit;
+  text-decoration: none;
+}

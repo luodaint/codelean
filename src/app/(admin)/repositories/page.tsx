@@ -1,5 +1,8 @@
 import { FolderGit2, ArrowUpRight, RefreshCw } from "lucide-react";
 import { overview } from "@/lib/data";
+import { userInstallations, type UserInstallation } from "@/lib/github";
+import { userGitHub } from "@/lib/github-user";
+import { canManage } from "@/lib/workspaces";
 import { githubConfigured } from "@/lib/config";
 import { sync, updateRepository } from "@/app/actions";
 import { Submit } from "@/components/submit";
@@ -11,6 +14,16 @@ export default async function Repositories({
   const data = await overview();
   const params = await searchParams;
   const configured = githubConfigured();
+  const managing = canManage(data.workspace);
+  let installations: UserInstallation[] = [];
+  let githubError = false;
+  if (configured && managing) {
+    try {
+      installations = await userInstallations(await userGitHub());
+    } catch {
+      githubError = true;
+    }
+  }
   return (
     <>
       <div className="page-heading">
@@ -18,7 +31,7 @@ export default async function Repositories({
           <h1>Repositories</h1>
           <p>Choose where Codelean reviews, and how it contributes.</p>
         </div>
-        {configured && (
+        {configured && managing && (
           <a
             className="button"
             href={`https://github.com/apps/${encodeURIComponent(process.env.GITHUB_APP_SLUG!)}/installations/new`}
@@ -31,14 +44,21 @@ export default async function Repositories({
       </div>
       {!configured && (
         <div className="notice">
-          Configure your GitHub App credentials in the deployment environment
-          first. The Settings page shows what is missing.
+          GitHub integration is not configured yet. Ask the instance operator to
+          finish the GitHub App setup.
         </div>
       )}
       {params.error && (
         <div role="alert" className="notice danger">
-          Could not sync GitHub installations. Check the App ID, private key,
-          and permissions, then try again.
+          Could not connect this installation. You must own the GitHub account
+          or organization and manage this workspace. An installation can belong
+          to only one workspace. Check the App credentials and try again.
+        </div>
+      )}
+      {githubError && (
+        <div role="alert" className="notice danger">
+          GitHub access could not be verified. Sign out and sign in with GitHub
+          again, or ask the instance operator to check the App configuration.
         </div>
       )}
       {params.synced && (
@@ -52,11 +72,25 @@ export default async function Repositories({
           <div>
             <h2>Connected repositories</h2>
             <p>
-              After installing the App, sync to verify its repository access.
+              Install the App, then select an installation to connect to this
+              workspace. GitHub organization owners can connect their company.
             </p>
           </div>
-          {configured && (
+          {configured && managing && (
             <form action={sync}>
+              <label>
+                GitHub account{" "}
+                <select name="installation" required defaultValue="">
+                  <option value="" disabled>
+                    Select an installation
+                  </option>
+                  {installations.map((i) => (
+                    <option key={i.id} value={i.id}>
+                      {i.account.login}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <Submit pending="Syncing…" className="button secondary">
                 <RefreshCw size={16} /> Sync from GitHub
               </Submit>
@@ -95,7 +129,7 @@ export default async function Repositories({
                     type="checkbox"
                     name="enabled"
                     defaultChecked={repo.enabled}
-                    disabled={!repo.connected}
+                    disabled={!repo.connected || !managing}
                   />{" "}
                   Review PRs
                 </label>
@@ -104,11 +138,11 @@ export default async function Repositories({
                     type="checkbox"
                     name="labels"
                     defaultChecked={repo.labels_enabled}
-                    disabled={!repo.connected}
+                    disabled={!repo.connected || !managing}
                   />{" "}
                   Update labels
                 </label>
-                {repo.connected && (
+                {repo.connected && managing && (
                   <Submit className="button secondary">Save</Submit>
                 )}
               </form>

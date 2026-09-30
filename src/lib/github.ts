@@ -68,35 +68,131 @@ export async function installationClient(
   );
   return new GitHub(token);
 }
-export async function syncRepositories() {
-  const installations = await new GitHub(appJwt()).pages<{
-    id: number;
-    suspended_at: string | null;
-  }>("/app/installations");
-  const repos: { id: number; full_name: string; installation: number }[] = [];
-  for (const install of installations.filter((i) => !i.suspended_at)) {
-    const gh = await installationClient(String(install.id));
-    for (let page = 1; page <= 100; page++) {
-      const result = await gh.request<{
-        repositories: { id: number; full_name: string }[];
-      }>(`/installation/repositories?per_page=100&page=${page}`);
-      repos.push(
-        ...result.repositories.map((r) => ({ ...r, installation: install.id })),
+export type UserInstallation = {
+  id: number;
+  app_id: number;
+  suspended_at: string | null;
+  account: { id: number; login: string; type: string };
+};
+export async function userInstallations(gh: GitHub) {
+  const all: UserInstallation[] = [];
+  for (let page = 1; page <= 100; page++) {
+    const result = await gh.request<{ installations: UserInstallation[] }>(
+      `/user/installations?per_page=100&page=${page}`,
+    );
+    all.push(
+      ...result.installations.filter(
+        (i) =>
+          i.app_id === Number(required("GITHUB_APP_ID")) && !i.suspended_at,
+      ),
+    );
+    if (result.installations.length < 100) return all;
+  }
+  throw new Error("Installation listing limit reached");
+}
+export async function authorizeInstallation(
+  gh: GitHub,
+  installationId: string,
+  githubUserId: string,
+) {
+  const installation = (await userInstallations(gh)).find(
+    (i) => String(i.id) === installationId,
+  );
+  if (!installation)
+    throw new Error("Installation unavailable for this GitHub account");
+  if (installation.account.type === "User") {
+    if (String(installation.account.id) !== githubUserId)
+      throw new Error(
+        "Only the GitHub account owner can connect this installation",
       );
-      if (result.repositories.length < 100) break;
-      if (page === 100) throw new Error("Repository listing limit reached");
-    }
+  } else if (installation.account.type === "Organization") {
+    // Listing the authenticated user's memberships requires no extra App permission.
+    const memberships = await gh.pages<{
+      state: string;
+      role: string;
+      organization: { id: number };
+    }>("/user/memberships/orgs?state=active");
+    if (
+      !memberships.some(
+        (m) =>
+          m.state === "active" &&
+          m.role === "admin" &&
+          m.organization.id === installation.account.id,
+      )
+    )
+      throw new Error(
+        "A GitHub organization owner must connect this installation",
+      );
+  } else throw new Error("Unsupported GitHub account type");
+  return installation;
+}
+export async function syncRepositories(
+  organizationId: string,
+  installationId: string,
+  userId: string,
+  githubUserId: string,
+  userGh: GitHub,
+) {
+  const install = await authorizeInstallation(
+    userGh,
+    installationId,
+    githubUserId,
+  );
+  const gh = await installationClient(installationId);
+  const repos: { id: number; full_name: string }[] = [];
+  for (let page = 1; page <= 100; page++) {
+    const result = await gh.request<{
+      repositories: { id: number; full_name: string }[];
+    }>(`/installation/repositories?per_page=100&page=${page}`);
+    repos.push(...result.repositories);
+    if (result.repositories.length < 100) break;
+    if (page === 100) throw new Error("Repository listing limit reached");
   }
   await transaction(async (c) => {
-    await c.query("UPDATE repositories SET connected=false");
-    for (const r of repos)
-      await c.query(
-        `INSERT INTO repositories(id, installation_id, full_name) VALUES ($1,$2,$3)
-      ON CONFLICT(id) DO UPDATE SET installation_id=$2, full_name=$3, connected=true`,
-        [r.id, r.installation, r.full_name],
-      );
+    // Recheck membership after network I/O and hold it through the mutation.
+    const member = await c.query(
+      `SELECT role FROM member WHERE "organizationId"=$1 AND "userId"=$2 FOR SHARE`,
+      [organizationId, userId],
+    );
+    if (!member.rows.some((m) => ["owner", "admin"].includes(m.role)))
+      throw new Error("Workspace access denied");
     await c.query(
-      "UPDATE runs SET status='cancelled', stage='Repository disconnected', completed_at=now() WHERE status IN ('queued','running') AND repository_id IN (SELECT id FROM repositories WHERE NOT connected)",
+      `INSERT INTO installations(id,organization_id,account_id,account_login) VALUES($1,$2,$3,$4) ON CONFLICT(id) DO NOTHING`,
+      [
+        installationId,
+        organizationId,
+        install.account.id,
+        install.account.login,
+      ],
+    );
+    const claimed = (
+      await c.query(
+        "SELECT organization_id FROM installations WHERE id=$1 FOR UPDATE",
+        [installationId],
+      )
+    ).rows[0];
+    if (claimed.organization_id !== organizationId)
+      throw new Error("Installation is already connected to another workspace");
+    await c.query(
+      "UPDATE installations SET account_id=$2,account_login=$3 WHERE id=$1",
+      [installationId, install.account.id, install.account.login],
+    );
+    await c.query(
+      "UPDATE repositories SET connected=false WHERE organization_id=$1 AND installation_id=$2",
+      [organizationId, installationId],
+    );
+    for (const r of repos) {
+      const saved = await c.query(
+        `INSERT INTO repositories(id,installation_id,full_name,organization_id) VALUES($1,$2,$3,$4)
+        ON CONFLICT(id) DO UPDATE SET installation_id=$2,full_name=$3,connected=true WHERE repositories.organization_id=$4 RETURNING id`,
+        [r.id, installationId, r.full_name, organizationId],
+      );
+      if (!saved.rowCount)
+        throw new Error("Repository belongs to another workspace");
+    }
+    await c.query(
+      `UPDATE runs SET status='cancelled',stage='Repository disconnected',completed_at=now() WHERE status IN ('queued','running') AND repository_id IN (SELECT id FROM repositories WHERE organization_id=$1 AND NOT connected)`,
+      [organizationId],
     );
   });
   return repos.length;

@@ -8,6 +8,14 @@ export function adminEmailAllowed(email: unknown, configured: string) {
       .includes(email.trim().toLowerCase())
   );
 }
+// An optional deployment gate, never a workspace authorization mechanism.
+export function signupAllowed(email: unknown) {
+  return (
+    (process.env.SIGNUP_MODE || "open") === "open" ||
+    (process.env.SIGNUP_MODE === "restricted" &&
+      adminEmailAllowed(email, process.env.ADMIN_EMAILS || ""))
+  );
+}
 export function localOtpBypass(
   nodeEnv: string | undefined,
   enabled: string | undefined,

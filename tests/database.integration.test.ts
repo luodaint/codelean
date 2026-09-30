@@ -21,13 +21,18 @@ suite("PostgreSQL webhook and queue integration", () => {
   beforeAll(async () => {
     process.env.DATABASE_URL = process.env.TEST_DATABASE_URL!;
     await db().query(
-      "INSERT INTO repositories(id,installation_id,full_name,enabled) VALUES($1,$2,'test/fixture',true) ON CONFLICT(id) DO UPDATE SET enabled=true,connected=true",
+      "INSERT INTO installations(id,organization_id) VALUES($1,'codelean-legacy')",
+      [installation],
+    );
+    await db().query(
+      "INSERT INTO repositories(id,installation_id,full_name,enabled,organization_id) VALUES($1,$2,'test/fixture',true,'codelean-legacy') ON CONFLICT(id) DO UPDATE SET enabled=true,connected=true",
       [repoId, installation],
     );
   });
   afterAll(async () => {
     await db().query("DELETE FROM runs WHERE repository_id=$1", [repoId]);
     await db().query("DELETE FROM repositories WHERE id=$1", [repoId]);
+    await db().query("DELETE FROM installations WHERE id=$1", [installation]);
     await db().query("DELETE FROM deliveries WHERE id=ANY($1::text[])", [
       deliveries,
     ]);

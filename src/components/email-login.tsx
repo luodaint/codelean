@@ -123,8 +123,8 @@ export function EmailLogin({ local }: { local: boolean }) {
       )}
       {local && (
         <p className="notice">
-          Local development: no email is sent. Any numeric code is accepted for
-          an allowed admin email.
+          Local development: no email is sent. Request a code, then enter any
+          number to sign in.
         </p>
       )}
     </>

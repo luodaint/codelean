@@ -4,7 +4,8 @@ x-database: &database
 x-auth: &auth
   APP_URL: ${APP_URL:?Set APP_URL}
   BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Generate .env with npm run setup}
-  ADMIN_EMAILS: ${ADMIN_EMAILS:?Set ADMIN_EMAILS}
+  SIGNUP_MODE: ${SIGNUP_MODE:-open}
+  ADMIN_EMAILS: ${ADMIN_EMAILS:-}
   DEV_AUTH_BYPASS: "false"
 x-github: &github
   GITHUB_APP_ID: ${GITHUB_APP_ID:-}

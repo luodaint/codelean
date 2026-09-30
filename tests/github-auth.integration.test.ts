@@ -29,6 +29,7 @@ let profile = { ...defaultProfile };
 let emails = [{ email, primary: true, verified: true }];
 let externalCalls: string[] = [];
 let requestNumber = 1;
+const workspaceIds: string[] = [];
 const testIp = () => `192.0.2.${requestNumber++}`;
 function mockGithub() {
   externalCalls = [];
@@ -56,6 +57,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
   () => {
     beforeAll(() => {
       vi.stubEnv("DATABASE_URL", process.env.TEST_DATABASE_URL!);
+      vi.stubEnv("SIGNUP_MODE", "restricted");
       vi.stubEnv("NODE_ENV", "development");
       vi.stubEnv("DEV_AUTH_BYPASS", "true");
       vi.stubEnv("APP_URL", origin);
@@ -69,10 +71,16 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
     });
     afterEach(() => {
       vi.unstubAllGlobals();
+      vi.stubEnv("SIGNUP_MODE", "restricted");
+      vi.stubEnv("NODE_ENV", "development");
+      vi.stubEnv("DEV_AUTH_BYPASS", "true");
       profile = { ...defaultProfile };
       emails = [{ email, primary: true, verified: true }];
     });
     afterAll(async () => {
+      await db().query("DELETE FROM organization WHERE id=ANY($1::text[])", [
+        workspaceIds,
+      ]);
       await db().query('DELETE FROM "user" WHERE email IN ($1,$2)', [
         email,
         "fresh-github-auth@example.test",
@@ -147,7 +155,11 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
       expect(account.accessToken).toBeTruthy();
       expect(account.accessToken).not.toContain("github-test-access-token");
     });
-    it("creates a new authorized GitHub user without an existing email-code account", async () => {
+    it("allows a new verified GitHub user to sign up without an email allowlist in open mode", async () => {
+      vi.stubEnv("SIGNUP_MODE", "open");
+      vi.stubEnv("NODE_ENV", "production");
+      vi.stubEnv("DEV_AUTH_BYPASS", "false");
+      vi.stubEnv("ADMIN_EMAILS", email);
       mockGithub();
       profile = { ...defaultProfile, id: defaultProfile.id + 1 };
       emails = [
@@ -173,6 +185,19 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
       });
       expect(session?.user.email).toBe("fresh-github-auth@example.test");
       expect(session?.user.githubId).toBe(String(profile.id));
+      const workspace = await auth.api.createOrganization({
+        headers: new Headers({ cookie: cookieHeader(response) }),
+        body: { name: "GitHub company", slug: "github-company-test" },
+      });
+      workspaceIds.push(workspace!.id);
+      expect(
+        (
+          await db().query(
+            'SELECT role FROM member WHERE "organizationId"=$1 AND "userId"=$2',
+            [workspace!.id, session!.user.id],
+          )
+        ).rows[0].role,
+      ).toBe("owner");
     });
     it("rejects client-supplied GitHub identity during email-code sign-in", async () => {
       const auth = createAuth();

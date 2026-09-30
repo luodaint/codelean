@@ -1,122 +1,132 @@
-import { CircleCheck, CircleDashed } from "lucide-react";
-import { appUrl } from "@/lib/config";
-import { requireAdmin } from "@/lib/auth";
-export default async function Settings() {
-  const session = await requireAdmin();
-  const checks = [
-    ["GitHub sign-in client ID", "GITHUB_CLIENT_ID"],
-    ["GitHub sign-in client secret", "GITHUB_CLIENT_SECRET"],
-    ["GitHub App ID", "GITHUB_APP_ID"],
-    ["GitHub private key", "GITHUB_PRIVATE_KEY_BASE64"],
-    ["GitHub App slug", "GITHUB_APP_SLUG"],
-    ["Webhook secret", "GITHUB_WEBHOOK_SECRET"],
-    ["Review model", "NAN_MODEL"],
-    ["Email server (optional fallback)", "SMTP_HOST"],
-    ["Allowed administrators", "ADMIN_EMAILS"],
-  ];
+import { headers } from "next/headers";
+import { auth, requireWorkspace } from "@/lib/auth";
+import { canManage } from "@/lib/workspaces";
+import { Submit } from "@/components/submit";
+import {
+  inviteMember,
+  removeMember,
+  cancelInvitation,
+} from "@/app/workspaces/actions";
+export default async function Settings({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string; invited?: string }>;
+}) {
+  const { session, workspace } = await requireWorkspace();
+  const params = await searchParams;
+  const organization = await auth().api.getFullOrganization({
+    headers: await headers(),
+    query: { organizationId: workspace.id },
+  });
+  const managing = canManage(workspace);
   return (
     <>
       <div className="page-heading">
         <div>
           <h1>Settings</h1>
-          <p>Your instance’s connections and review defaults.</p>
+          <p>{workspace.name} · Workspace members and review policy.</p>
         </div>
       </div>
-      <section className="panel endpoint">
+      <section className="panel workspace-panel">
         <h2>Your account</h2>
         <p>
-          {session.user.name || session.user.email} · {session.user.email}
+          {session.user.name ? `${session.user.name} · ` : ""}
+          {session.user.email}
         </p>
-        {session.user.githubUsername ? (
-          <p>
-            <a
-              href={`https://github.com/${session.user.githubUsername}`}
-              target="_blank"
-              rel="noreferrer"
-            >
-              @{session.user.githubUsername}
-            </a>{" "}
-            · GitHub ID {session.user.githubId}
-          </p>
-        ) : (
-          <p>
-            Signed in with an email code. Sign out and continue with GitHub to
-            connect your identity using a matching verified email.
-          </p>
-        )}
         <p>
-          GitHub sign-in identifies you. Repository access is granted separately
-          by installing the App.
+          {session.user.githubUsername
+            ? `@${session.user.githubUsername}`
+            : "Sign in with GitHub to connect repositories."}{" "}
+          · {workspace.role}
         </p>
       </section>
-      <div className="settings-grid">
-        <section className="panel">
-          <div className="panel-heading">
+      <section className="panel workspace-panel">
+        <h2>Team members</h2>
+        <p>
+          Members can view reviews. Owners and administrators can manage
+          repositories, retry reviews, and invite teammates.
+        </p>
+        {organization?.members.map((m) => (
+          <div key={m.id} className="workspace-row">
             <div>
-              <h2>Connections</h2>
-              <p>Credentials are managed in your deployment environment.</p>
+              <strong>{m.user.name}</strong>
+              <small>
+                {m.user.email} · {m.role}
+              </small>
             </div>
+            {managing && m.role !== "owner" && m.userId !== session.user.id && (
+              <form action={removeMember}>
+                <input type="hidden" name="memberId" value={m.id} />
+                <Submit className="button secondary">Remove member</Submit>
+              </form>
+            )}
           </div>
-          <div className="settings-list">
-            {checks.map(([label, key]) => (
-              <div key={key}>
-                <span>{label}</span>
-                <span className={process.env[key] ? "configured" : "muted"}>
-                  {process.env[key] ? (
-                    <>
-                      <CircleCheck size={16} /> Configured
-                    </>
-                  ) : (
-                    <>
-                      <CircleDashed size={16} /> Missing
-                    </>
-                  )}
+        ))}
+      </section>
+      {managing && (
+        <section className="panel workspace-panel">
+          <h2>Invite a teammate</h2>
+          <p>
+            Use their verified GitHub sign-in email. They’ll see the invitation
+            on their Workspaces page. No email is sent.
+          </p>
+          {params.error && (
+            <p role="alert" className="notice danger">
+              Could not create the invitation. Check the email, existing
+              invitations, and your workspace role.
+            </p>
+          )}
+          {params.invited && (
+            <p className="notice success">
+              Invitation created. Ask your teammate to sign in and open
+              Workspaces.
+            </p>
+          )}
+          <form action={inviteMember} className="workspace-form">
+            <label>
+              Email
+              <input type="email" name="email" required />
+            </label>
+            <label>
+              Role
+              <select name="role" defaultValue="member">
+                <option value="member">Member — view reviews</option>
+                <option value="admin">Administrator — manage workspace</option>
+              </select>
+            </label>
+            <Submit className="button">Create invitation</Submit>
+          </form>
+          {organization?.invitations
+            .filter((i) => i.status === "pending")
+            .map((i) => (
+              <form
+                key={i.id}
+                action={cancelInvitation}
+                className="workspace-row"
+              >
+                <input type="hidden" name="invitationId" value={i.id} />
+                <span>
+                  {i.email} · {i.role}
                 </span>
-              </div>
+                <Submit className="button secondary">Cancel invitation</Submit>
+              </form>
             ))}
-          </div>
         </section>
-        <section className="panel">
-          <div className="panel-heading">
-            <h2>Review policy</h2>
-          </div>
-          <dl className="policy-list">
-            <dt>Mode</dt>
-            <dd>Advisory</dd>
-            <dt>Automatic approvals</dt>
-            <dd>Disabled</dd>
-            <dt>GitHub check outcome</dt>
-            <dd>Neutral</dd>
-            <dt>Model</dt>
-            <dd>{process.env.NAN_MODEL || "Not configured"}</dd>
-            <dt>Concurrent scans</dt>
-            <dd>1</dd>
-            <dt>Changed files per run</dt>
-            <dd>Up to 30</dd>
-            <dt>Inline comments</dt>
-            <dd>Up to 5</dd>
-          </dl>
-        </section>
-      </div>
-      <section className="panel endpoint">
-        <h2>GitHub sign-in callback</h2>
+      )}
+      <section className="panel workspace-panel">
+        <h2>Review policy</h2>
         <p>
-          Add this callback URL to the GitHub App’s user authorization settings.
+          Reviews are advisory. Automatic approvals and merges are disabled.
         </p>
-        <code>{appUrl()}/api/auth/callback/github</code>
+        <dl className="policy-list">
+          <dt>Model</dt>
+          <dd>{process.env.NAN_MODEL || "Not configured"}</dd>
+          <dt>Changed files per run</dt>
+          <dd>Up to 30</dd>
+          <dt>Inline comments</dt>
+          <dd>Up to 5</dd>
+        </dl>
       </section>
-      <section className="panel endpoint">
-        <h2>GitHub webhook</h2>
-        <p>
-          Use this endpoint when registering your GitHub App. Subscribe to pull
-          request, installation, and installation repositories events.
-        </p>
-        <code>{appUrl()}/api/webhooks/github</code>
-      </section>
-      <p className="help-text">
-        The web interface never displays saved credentials. Restart affected
-        services after changing deployment environment variables.
-      </p>
     </>
   );
 }

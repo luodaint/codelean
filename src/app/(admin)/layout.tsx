@@ -1,4 +1,4 @@
-import { requireAdmin } from "@/lib/auth";
+import { requireWorkspace } from "@/lib/auth";
 import { Shell } from "@/components/shell";
 export const dynamic = "force-dynamic";
 export default async function AdminLayout({
@@ -6,9 +6,10 @@ export default async function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const session = await requireAdmin();
+  const { session, workspace } = await requireWorkspace();
   return (
     <Shell
+      workspace={workspace}
       email={session.user.email}
       name={session.user.name}
       githubUsername={session.user.githubUsername}

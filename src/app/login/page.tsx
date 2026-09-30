@@ -1,7 +1,7 @@
 import { Brand } from "@/components/shell";
 import { GitHubLogin } from "@/components/github-login";
 import { EmailLogin } from "@/components/email-login";
-import { isAdmin } from "@/lib/auth";
+import { isSignedIn } from "@/lib/auth";
 import { localOtpBypass } from "@/lib/auth-policy";
 import {
   appUrl,
@@ -21,7 +21,7 @@ export default async function Login({
     process.env.DEV_AUTH_BYPASS,
     appUrl(),
   );
-  if (await isAdmin()) redirect("/");
+  if (await isSignedIn()) redirect("/");
   return (
     <div className="login-page">
       <div className="login-story">
@@ -46,8 +46,8 @@ export default async function Login({
         </p>
         {error && (
           <p className="notice danger" role="alert">
-            GitHub sign-in did not complete. Try again, and make sure a verified
-            email on your GitHub account is allowed for this workspace.
+            GitHub sign-in did not complete. Try again, and make sure your
+            GitHub account has a verified email.
           </p>
         )}
         <GitHubLogin configured={githubLoginConfigured()} />
@@ -65,8 +65,8 @@ export default async function Login({
           </details>
         )}
         <p className="login-note">
-          Access is limited to the administrator emails configured for this
-          instance.
+          Sign in to create a company workspace or join your team. Your
+          repositories and reviews stay within your workspace.
         </p>
       </div>
     </div>

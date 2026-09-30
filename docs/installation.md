@@ -20,25 +20,26 @@ chmod 600 .env
 
 Setup creates `.env` with random secrets and refuses to overwrite an existing file. Keep it outside version control and protect it in backups. You can also configure variables in Dokploy's protected environment editor without a server-side Node installation; generate independent 32-byte random secrets there/with your password manager and use `.env.example` as the field reference. Do not paste private credentials into an agent conversation.
 
-| Variable                                   | Configuration                                                                        |
-| ------------------------------------------ | ------------------------------------------------------------------------------------ |
-| `APP_URL`                                  | Canonical public origin, e.g. `https://codelean.dev`; no trailing slash              |
-| `APP_DOMAIN`                               | Same hostname without scheme, for the supplied Traefik override                      |
-| `ADMIN_EMAILS`                             | Comma-separated exact email addresses; all are instance administrators               |
-| `BETTER_AUTH_SECRET`                       | Generated random secret, at least 32 characters                                      |
-| `DEV_AUTH_BYPASS`                          | `false` on servers; Compose forces this value                                        |
-| `SMTP_HOST`, `SMTP_PORT`                   | Your SMTP server; usually port 587                                                   |
-| `SMTP_SECURE`                              | `true` for implicit TLS, usually 465; `false` uses mandatory STARTTLS                |
-| `SMTP_USER`, `SMTP_PASSWORD`, `EMAIL_FROM` | SMTP credentials and verified sender; use an application credential                  |
-| `POSTGRES_PASSWORD`                        | Generated database password; use hex/alphanumeric or URL-encode a custom password    |
-| `DATABASE_URL`                             | Used by host-run Node commands; Compose constructs its own internal URL              |
-| `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` | GitHub App user authorization credentials for sign-in; Client ID differs from App ID |
-| `GITHUB_APP_ID`, `GITHUB_APP_SLUG`         | Dedicated GitHub App numeric ID and URL slug                                         |
-| `GITHUB_PRIVATE_KEY_BASE64`                | Base64-encoded PEM key in one line; still a secret                                   |
-| `GITHUB_WEBHOOK_SECRET`                    | Same generated value configured in GitHub                                            |
-| `NAN_BASE_URL`                             | `https://api.nan.builders/v1`, or an explicitly trusted HTTPS-compatible provider    |
-| `NAN_API_KEY`, `NAN_MODEL`                 | Provider credential and exact model ID from your account                             |
-| `SCANNER_TOKEN`                            | Generated shared scanner credential; Compose supplies the private scanner URL        |
+| Variable                                   | Configuration                                                                           |
+| ------------------------------------------ | --------------------------------------------------------------------------------------- |
+| `APP_URL`                                  | Canonical public origin, e.g. `https://codelean.dev`; no trailing slash                 |
+| `APP_DOMAIN`                               | Same hostname without scheme, for the supplied Traefik override                         |
+| `SIGNUP_MODE`                              | `open` (default) for self-service GitHub signup; `restricted` for a private pilot       |
+| `ADMIN_EMAILS`                             | Optional restricted-mode allowlist; also used once to migrate existing workspace owners |
+| `BETTER_AUTH_SECRET`                       | Generated random secret, at least 32 characters                                         |
+| `DEV_AUTH_BYPASS`                          | `false` on servers; Compose forces this value                                           |
+| `SMTP_HOST`, `SMTP_PORT`                   | Your SMTP server; usually port 587                                                      |
+| `SMTP_SECURE`                              | `true` for implicit TLS, usually 465; `false` uses mandatory STARTTLS                   |
+| `SMTP_USER`, `SMTP_PASSWORD`, `EMAIL_FROM` | SMTP credentials and verified sender; use an application credential                     |
+| `POSTGRES_PASSWORD`                        | Generated database password; use hex/alphanumeric or URL-encode a custom password       |
+| `DATABASE_URL`                             | Used by host-run Node commands; Compose constructs its own internal URL                 |
+| `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` | GitHub App user authorization credentials for sign-in; Client ID differs from App ID    |
+| `GITHUB_APP_ID`, `GITHUB_APP_SLUG`         | Dedicated GitHub App numeric ID and URL slug                                            |
+| `GITHUB_PRIVATE_KEY_BASE64`                | Base64-encoded PEM key in one line; still a secret                                      |
+| `GITHUB_WEBHOOK_SECRET`                    | Same generated value configured in GitHub                                               |
+| `NAN_BASE_URL`                             | `https://api.nan.builders/v1`, or an explicitly trusted HTTPS-compatible provider       |
+| `NAN_API_KEY`, `NAN_MODEL`                 | Provider credential and exact model ID from your account                                |
+| `SCANNER_TOKEN`                            | Generated shared scanner credential; Compose supplies the private scanner URL           |
 
 For a PEM key, encode it locally and copy through a secure channel; avoid logging the output in automation. The application never requests your personal GitHub access token. The configured NaN model must support chat completions and returning JSON. [NaN documents its API](https://nan.builders/docs); the app validates JSON itself and does not depend on a provider-specific structured-output flag.
 
@@ -75,14 +76,14 @@ Create a dedicated GitHub App for this Codelean instance under your account or o
 - Subscribe to **Pull request** events. Installation and repository installation changes are also handled.
 - Install on selected test repositories. Put the app ID, slug and private key in configuration and redeploy.
 
-Sign in with GitHub using an account with an allowlisted verified email. Optional SMTP configuration enables email-code fallback. In Repositories, install the App if needed, click **Sync repositories**, then explicitly enable the desired repository. New repositories start paused. Enabling labels is optional. A new/update PR event after enabling queues a run; existing PRs are not bulk-imported.
+Choose **Any account** under installation availability so other personal accounts and organizations can install the same App. Sign in with GitHub using a verified email and create a company workspace. Optional SMTP configuration enables email-code fallback. In Repositories, install the App if needed, select its installation, click **Sync repositories**, then explicitly enable the desired repository. You must be the personal account owner or an active GitHub organization owner, and a Codelean workspace owner/admin. The installation can belong to only one workspace. New repositories start paused. Enabling labels is optional. A new/update PR event after enabling queues a run; existing PRs are not bulk-imported.
 
 The permissions support the [GitHub checks](https://docs.github.com/en/rest/checks/runs) and [reviews](https://docs.github.com/en/rest/pulls/reviews) APIs. Never enable auto-approval based on this release: it publishes advisory COMMENT reviews only.
 
 ## 5. Verify before normal use
 
 1. Confirm `/api/health` returns 200 over HTTPS and the login page is accessible. This checks web/database readiness, not external credentials.
-2. Sign in with GitHub and confirm your profile appears in Settings. A non-allowlisted or unverified email must fail. If email fallback is configured, a wrong code must fail. Confirm the numeric bypass is off and PostgreSQL/scanner are unreachable externally.
+2. Sign in with GitHub and confirm your profile appears in Settings. An unverified email must fail. In open mode, a new verified user must be able to create a workspace but must not see another company’s data. In restricted mode, a non-allowlisted email must fail. If email fallback is configured, a wrong code must fail. Confirm the numeric bypass is off and PostgreSQL/scanner are unreachable externally.
 3. Confirm the dashboard worker status is online and scanner container health is healthy. Review only scoped logs; avoid dumping environments.
 4. Open a designated PR with a small known issue. Verify delivery response, queued/running/completed stages, check progress, findings and comments. Push another commit during review and check stale publication is stopped.
 5. Exercise a provider failure and manual retry; incomplete work must never appear as a clean approval. Review the comment volume and findings quality before enabling more repositories.
@@ -120,3 +121,19 @@ Record the source revision and local image IDs for each deployment. Pause enable
 There are no down-migrations in v0.1. If a schema change is incompatible, image rollback alone is insufficient: restore the matching backup into a separate target and account for intervening writes before cutover. Keep the prior source and images until the upgrade is verified.
 
 Monitor failed runs, worker heartbeat, database/disk usage and scanner health. There is no automatic run/delivery retention cleanup yet; set a retention policy before sustained use and implement scoped cleanup against it. Configure Docker log rotation at the platform/service level. Never run global Docker prune or `down -v` as routine maintenance; the named PostgreSQL volume contains your state.
+
+## Workspace upgrades and recovery
+
+Before upgrading the original single-workspace version, stop web/worker, back up PostgreSQL, and retain the prior `ADMIN_EMAILS` value while running `npm run migrate`. Better Auth schema changes run first, followed by application migrations. Migration 002 preserves repository/run IDs in **Original workspace** and grants ownership only to matching users already in the database. Afterward, `SIGNUP_MODE=open` allows public signup without that list. Existing users choose their workspace after signing in.
+
+If the old list is empty or contains no existing users, the historical workspace stays inaccessible. A trusted database operator must explicitly assign an existing verified user; it is never claimed automatically by the next visitor. In a protected database session, substitute the intended verified user's email in this statement, review the returned user ID, and confirm it is the correct account:
+
+```sql
+INSERT INTO member (id, "organizationId", "userId", role, "createdAt")
+SELECT gen_random_uuid()::text, 'codelean-legacy', id, 'owner', now()
+FROM "user" WHERE lower(email)=lower('YOUR_VERIFIED_EMAIL') AND "emailVerified"=true
+ON CONFLICT ("organizationId", "userId") DO NOTHING
+RETURNING "userId", "organizationId", role;
+```
+
+For a fresh installation, leave that empty legacy workspace alone and create your company from the UI. See [workspace onboarding](../README.md#company-workspaces) for roles and invitations. Billing, company budgets, installation transfers and company deletion are not included in this release.

@@ -27,7 +27,7 @@ INPUTS TO RESOLVE
 - Actual repository URL or local checkout and release tag/digest to install.
 - Public application domain and, for fresh setup, Dokploy administration domain.
 - Administrative account, public SSH key, allowed admin networks or VPN path.
-- ADMIN_EMAILS allowlist and GitHub App sign-in credentials; optional SMTP for email codes.
+- SIGNUP_MODE (open by default) and GitHub App sign-in credentials; optional SMTP for email codes.
 - Recovery console availability and backup destination/retention.
 - Secure way to supply GitHub App credentials, NaN credentials, and app secrets.
 
@@ -173,13 +173,19 @@ the documented isolated backend and enforce fixed images, mounts, and commands.
 Treat scanner containers as limited isolation, not proof of VM-level separation.
 
 Use compose.yml plus compose.dokploy.yml, or Dokploy domain routing as documented.
-Set APP_URL/APP_DOMAIN, ADMIN_EMAILS, GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET,
+Set APP_URL/APP_DOMAIN, SIGNUP_MODE=open, GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET,
 all generated/application secrets, and optional SMTP for email-code fallback.
 Set the App callback to https://YOUR_HOST/api/auth/callback/github and account
 permission Email addresses: Read-only. Sign-in does not grant repository access.
 Production Compose forces DEV_AUTH_BYPASS=false; never enable the development
 numeric-code bypass on the server. Only local next dev may use that option.
-The migration service applies SQL and Better Auth migrations before web/worker.
+The migration service applies Better Auth then SQL migrations before web/worker.
+When upgrading a private instance, preserve the prior ADMIN_EMAILS for the first
+workspace migration and back up first. It assigns only existing matching users
+to the original workspace. New signups create separate company workspaces.
+Configure the GitHub App for Any account to support other companies. Verify
+two separate workspace accounts cannot see or mutate each other's reviews.
+Billing, per-company budgets and fair scheduling are not implemented yet.
 Start services and check actual readiness at /api/health and worker heartbeat.
 Register/configure the operator's GitHub App using the implemented setup and
 webhook routes (POST /api/webhooks/github) and documented permissions; install on selected test repositories.
