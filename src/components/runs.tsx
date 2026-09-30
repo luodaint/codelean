@@ -38,20 +38,58 @@ export function date(value: string | Date) {
     timeZone: "UTC",
   });
 }
-export function RunsTable({ runs }: { runs: Run[] }) {
+export function RunsTable({
+  runs,
+  connectedRepositories,
+  enabledRepositories,
+  filtered,
+}: {
+  runs: Run[];
+  connectedRepositories: number;
+  enabledRepositories: number;
+  filtered: boolean;
+}) {
+  const empty = filtered
+    ? {
+        title: "No reviews match your filters",
+        description:
+          "Try another repository or pull request, or clear your filters to see all reviews.",
+        action: "Clear filters",
+        href: "/",
+      }
+    : enabledRepositories > 0
+      ? {
+          title: "Waiting for your first review",
+          description:
+            "Reviews are enabled. Open a pull request, push a new commit to an existing one, or mark a draft ready for review in an enabled repository. Its progress and results will appear here automatically.",
+          action: "Manage repositories",
+          href: "/repositories",
+        }
+      : connectedRepositories > 0
+        ? {
+            title: "Enable reviews to get started",
+            description:
+              "Your repositories are connected. Enable Review PRs on a repository and save to start reviewing new pull request activity.",
+            action: "Enable reviews",
+            href: "/repositories",
+          }
+        : {
+            title: "Your next PR starts here",
+            description:
+              "Connect a repository and enable reviews. New pull requests will appear here with checks, findings, and a clear review history.",
+            action: "Connect a repository",
+            href: "/repositories",
+          };
   if (!runs.length)
     return (
       <div className="empty">
         <div className="empty-icon">
           <GitPullRequest size={32} strokeWidth={1.3} />
         </div>
-        <h2>Your next PR starts here</h2>
-        <p>
-          Connect a repository and enable reviews. New pull requests will appear
-          here with checks, findings, and a clear review history.
-        </p>
-        <Link className="button" href="/repositories">
-          Connect a repository <ArrowUpRight size={16} />
+        <h2>{empty.title}</h2>
+        <p>{empty.description}</p>
+        <Link className="button" href={empty.href}>
+          {empty.action} <ArrowUpRight size={16} />
         </Link>
       </div>
     );
