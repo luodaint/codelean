@@ -84,6 +84,22 @@ content per phase. Missing, malformed, oversized, or escaping files fail the run
 not silently ignored. Only Markdown is read. Scripts are never executed. Keep
 credentials out of skill files: enabled text is sent to your NaN model.
 
+## Tune output length
+
+The shared writing contract in `src/lib/review.ts` (`systemPrompt`) applies to
+ordinary review, security discovery, and verification. It asks for a 1-2 sentence
+summary, a short problem title, a description covering trigger and impact, exact
+source evidence, and a specific fix. Descriptions target 60 words and fixes 40;
+these are flexible writing targets, not truncation or validation limits. Complex
+findings should keep essential prerequisites, evidence, safeguards, and test advice.
+Verification retains candidate fields unchanged and summarizes common rejection
+reasons without a candidate-by-candidate narrative.
+
+The same saved finding text appears in the app and GitHub inline comments. This
+policy reduces repetition in future runs without lowering the reasoning token
+budget, removing findings, or rewriting existing reports. Tune the shared contract
+for all agents, or the adapters here for skill-specific guidance.
+
 ## Apply changes and inspect results
 
 Local workers read skills anew for each analysis; no restart is needed for a
