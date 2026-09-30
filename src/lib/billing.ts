@@ -97,6 +97,8 @@ export async function assertRepositoryLimit(
   if (!billingEnabled()) return;
   const b = await billingAccount(organizationId, c);
   checkAccess(b);
+  // The verified service owner's workspaces are not subject to plan repo caps.
+  if (b.owner_exempt) return;
   const count = (
     await c.query(
       "SELECT count(*)::int AS n FROM repositories WHERE organization_id=$1 AND enabled AND id<>$2",

@@ -49,24 +49,29 @@ export async function updateRepository(form: FormData) {
   await requireMutation();
   const { workspace } = await requireWorkspace(true);
   const id = z.string().regex(/^\d+$/).parse(form.get("id"));
-  await transaction(async (c) => {
-    if (form.get("enabled") === "on")
-      await assertRepositoryLimit(workspace.id, id, c);
-    await c.query(
-      "UPDATE repositories SET enabled=$2, labels_enabled=$3 WHERE id=$1 AND organization_id=$4 AND connected=true",
-      [
-        id,
-        form.get("enabled") === "on",
-        form.get("labels") === "on",
-        workspace.id,
-      ],
-    );
-    if (form.get("enabled") !== "on")
+  try {
+    await transaction(async (c) => {
+      if (form.get("enabled") === "on")
+        await assertRepositoryLimit(workspace.id, id, c);
       await c.query(
-        "UPDATE runs SET status='cancelled', completed_at=now(), stage='Repository paused' WHERE repository_id=$1 AND repository_id IN (SELECT id FROM repositories WHERE organization_id=$2) AND status IN ('queued','running')",
-        [id, workspace.id],
+        "UPDATE repositories SET enabled=$2, labels_enabled=$3 WHERE id=$1 AND organization_id=$4 AND connected=true",
+        [
+          id,
+          form.get("enabled") === "on",
+          form.get("labels") === "on",
+          workspace.id,
+        ],
       );
-  });
+      if (form.get("enabled") !== "on")
+        await c.query(
+          "UPDATE runs SET status='cancelled', completed_at=now(), stage='Repository paused' WHERE repository_id=$1 AND repository_id IN (SELECT id FROM repositories WHERE organization_id=$2) AND status IN ('queued','running')",
+          [id, workspace.id],
+        );
+    });
+  } catch (error) {
+    if (!(error instanceof BillingBlocked)) throw error;
+    redirect(`/repositories?billingError=${encodeURIComponent(error.message)}`);
+  }
   revalidatePath("/", "layout");
 }
 export async function retryRun(form: FormData) {

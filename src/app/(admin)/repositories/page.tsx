@@ -10,7 +10,11 @@ import { InstallationRefresh } from "@/components/installation-refresh";
 export default async function Repositories({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; synced?: string }>;
+  searchParams: Promise<{
+    error?: string;
+    synced?: string;
+    billingError?: string;
+  }>;
 }) {
   const data = await overview();
   const params = await searchParams;
@@ -50,6 +54,13 @@ export default async function Repositories({
         <div className="notice">
           GitHub integration is not configured yet. Ask the instance operator to
           finish the GitHub App setup.
+        </div>
+      )}
+      {params.billingError && (
+        <div role="alert" className="notice danger">
+          <strong>Repository settings were not saved.</strong>{" "}
+          {params.billingError} Review your workspace limits in{" "}
+          <a href="/billing">Billing</a> before trying again.
         </div>
       )}
       {params.error && (

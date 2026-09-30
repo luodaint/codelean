@@ -9,9 +9,10 @@ import {
   it,
   vi,
 } from "vitest";
-import { db } from "../src/lib/db";
+import { db, transaction } from "../src/lib/db";
 import {
   assertReviewAccess,
+  assertRepositoryLimit,
   billingAccount,
   finishModelCall,
   recordModelUsage,
@@ -152,6 +153,15 @@ suite("billing PostgreSQL integration", () => {
       [randomUUID(), organizationId, `owner-${organizationId}`],
     );
     await expect(assertReviewAccess(organizationId)).resolves.toBeUndefined();
+    await db().query(
+      "UPDATE billing_accounts SET repository_limit=1 WHERE organization_id=$1",
+      [organizationId],
+    );
+    await expect(
+      transaction((c) =>
+        assertRepositoryLimit(organizationId, String(repositoryId + 10000), c),
+      ),
+    ).resolves.toBeUndefined();
     await withReviewBilling(run, async () => {
       await call(30_000_000);
       await saveReviewResult(run, result, 30_000_000, "test-model");
@@ -164,6 +174,32 @@ suite("billing PostgreSQL integration", () => {
         )
       ).rowCount,
     ).toBe(0);
+  });
+  it("still enforces repository caps for paid and complimentary non-owner workspaces", async () => {
+    await db().query(
+      "UPDATE billing_accounts SET repository_limit=1 WHERE organization_id=$1",
+      [organizationId],
+    );
+    for (const complimentary of [false, true]) {
+      await db().query(
+        "UPDATE billing_accounts SET complimentary=$2 WHERE organization_id=$1",
+        [organizationId, complimentary],
+      );
+      await expect(
+        transaction((c) =>
+          assertRepositoryLimit(
+            organizationId,
+            String(repositoryId + 10000),
+            c,
+          ),
+        ),
+      ).rejects.toThrow("1 enabled repositories");
+      await expect(
+        transaction((c) =>
+          assertRepositoryLimit(organizationId, String(repositoryId), c),
+        ),
+      ).resolves.toBeUndefined();
+    }
   });
   it("serializes concurrent reservations so parallel agents cannot overshoot a cap", async () => {
     await db().query(
