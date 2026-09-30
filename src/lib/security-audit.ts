@@ -1,3 +1,4 @@
+import type { ReviewOrchestrator } from "./review-orchestrator";
 import { modelReview, systemPrompt } from "./review";
 import { loadReviewSkills, type LoadedSkills } from "./review-skills";
 import type { Finding, SecurityAuditResult, SourceFile } from "./types";
@@ -21,6 +22,7 @@ export async function securityAudit(
     index: number,
     total: number,
   ) => Promise<void> = async () => {},
+  orchestrator?: ReviewOrchestrator,
 ): Promise<{
   audit: SecurityAuditResult;
   findings: Finding[];
@@ -46,6 +48,8 @@ export async function securityAudit(
   }
   const discovered = await modelReview(files, scannerFindings, {
     instructions: auditPrompt(skills, false),
+    orchestrator,
+    phase: "Security audit",
     beforeBatch: (index, total) => onBatch("discovery", index, total),
   });
   let verified = discovered;
@@ -53,6 +57,8 @@ export async function securityAudit(
     await beforeVerification();
     verified = await modelReview(files, scannerFindings, {
       instructions: auditPrompt(skills, true),
+      orchestrator,
+      phase: "Security verification",
       candidates: discovered.findings,
       beforeBatch: (index, total) => onBatch("verification", index, total),
     });

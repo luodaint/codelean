@@ -53,6 +53,22 @@ describe("NaN streamed responses", () => {
     );
     expect(data.choices[0].finish_reason).toBe("length");
   });
+  it("retains the provider reasoning cutoff marker without storing its details", async () => {
+    const data = await readModelResponse(
+      response([
+        event({ choices: [{ delta: {}, finish_reason: "length" }] }),
+        event({
+          choices: [],
+          usage: { total_tokens: 123 },
+          nan_truncation: { reason: "private detail" },
+        }),
+        "data: [DONE]\n\n",
+      ]),
+    );
+    expect(data.nan_truncation).toBe(true);
+    expect(data.usage.total_tokens).toBe(123);
+    expect(JSON.stringify(data)).not.toContain("private detail");
+  });
   it("rejects a disconnected stream even if it contains complete-looking JSON", async () => {
     await expect(
       readModelResponse(

@@ -1,4 +1,11 @@
-export class ModelReviewError extends Error {}
+export class ModelReviewError extends Error {
+  constructor(
+    message: string,
+    public readonly retryable = false,
+  ) {
+    super(message);
+  }
+}
 
 // Consume the provider's SSE stream without storing or exposing reasoning text.
 // Streaming keeps long reasoning requests active through the provider's proxy.
@@ -23,6 +30,7 @@ export async function readModelResponse(response: Response) {
     content = "",
     finishReason: string | null = null;
   let usage: { total_tokens?: number } | undefined;
+  let nanTruncation = false;
   let bytes = 0,
     done = false;
   function dispatch() {
@@ -55,6 +63,8 @@ export async function readModelResponse(response: Response) {
     if (typeof choice?.finish_reason === "string")
       finishReason = choice.finish_reason;
     if (chunk.usage) usage = { total_tokens: chunk.usage.total_tokens };
+    if (chunk.nan_truncation || chunk.usage?.nan_truncation)
+      nanTruncation = true;
   }
   try {
     while (!done) {
@@ -90,6 +100,7 @@ export async function readModelResponse(response: Response) {
     return {
       choices: [{ message: { content }, finish_reason: finishReason }],
       usage,
+      ...(nanTruncation ? { nan_truncation: true } : {}),
     };
   } finally {
     await reader.cancel().catch(() => {});

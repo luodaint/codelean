@@ -70,7 +70,11 @@ try {
         ])
       ).rows[0]?.publication_started;
       const cancelled = error instanceof Superseded;
-      const retry = !cancelled && !uncertain && run.attempts < 3;
+      const retry =
+        !cancelled &&
+        !uncertain &&
+        run.attempts < 3 &&
+        (!(error instanceof ModelReviewError) || error.retryable);
       // Do not store provider response bodies, repository code, or arbitrary error strings.
       const message = cancelled
         ? "This revision is no longer current."

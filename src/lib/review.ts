@@ -5,6 +5,7 @@ import type { Finding, SourceFile } from "./types";
 import { loadReviewSkills } from "./review-skills";
 import { ModelReviewError, readModelResponse } from "./model-response";
 export { ModelReviewError } from "./model-response";
+import { ReviewOrchestrator, type ReviewPhase } from "./review-orchestrator";
 
 export const findingSchema = z
   .object({
@@ -115,6 +116,8 @@ export async function modelReview(
     instructions?: string;
     candidates?: Finding[];
     beforeBatch?: (index: number, total: number) => Promise<void>;
+    orchestrator?: ReviewOrchestrator;
+    phase?: ReviewPhase;
   } = {},
 ) {
   const skills =
@@ -135,20 +138,36 @@ export async function modelReview(
   );
   if (!batches.length)
     throw new ModelReviewError("No files available for model review.");
-  const results: Awaited<ReturnType<typeof reviewBatch>>[] = [];
-  for (const [index, batch] of batches.entries()) {
-    await options.beforeBatch?.(index + 1, batches.length);
-    const paths = new Set(batch.map((file) => file.path));
-    results.push(
-      await reviewBatch(
-        batch,
-        scannerFindings.filter((f) => paths.has(f.path)),
-        {
-          instructions,
-          candidates: options.candidates?.filter((f) => paths.has(f.path)),
-        },
+  const orchestrator = options.orchestrator || new ReviewOrchestrator();
+  let results: Awaited<ReturnType<typeof reviewBatch>>[];
+  try {
+    const settled = await Promise.allSettled(
+      batches.map((batch, index) =>
+        orchestrator.run(options.phase || "Review", async (signal) => {
+          await options.beforeBatch?.(index + 1, batches.length);
+          signal.throwIfAborted();
+          const paths = new Set(batch.map((file) => file.path));
+          return reviewBatch(
+            batch,
+            scannerFindings.filter((f) => paths.has(f.path)),
+            {
+              instructions,
+              candidates: options.candidates?.filter((f) => paths.has(f.path)),
+              signal,
+            },
+          );
+        }),
       ),
     );
+    const failure = settled.find((r) => r.status === "rejected");
+    if (failure) throw orchestrator.signal.reason || failure.reason;
+    results = settled.map(
+      (r) =>
+        (r as PromiseFulfilledResult<Awaited<ReturnType<typeof reviewBatch>>>)
+          .value,
+    );
+  } finally {
+    if (!options.orchestrator) await orchestrator.close();
   }
   const warnings = results.flatMap((r) => r.warnings);
   if (batches.length > 1)
@@ -183,7 +202,39 @@ export async function modelReview(
 async function reviewBatch(
   files: SourceFile[],
   scannerFindings: Finding[],
-  options: { instructions: string; candidates?: Finding[] },
+  options: {
+    instructions: string;
+    candidates?: Finding[];
+    signal: AbortSignal;
+  },
+) {
+  const signal = AbortSignal.any([
+    options.signal,
+    AbortSignal.timeout(limits.modelTimeoutMs),
+  ]);
+  try {
+    return await requestReviewBatch(files, scannerFindings, {
+      ...options,
+      signal,
+    });
+  } catch (error) {
+    if (options.signal.aborted) throw options.signal.reason;
+    if (signal.aborted)
+      throw new ModelReviewError(
+        "A review agent exceeded its request time limit. No clean review was produced.",
+      );
+    throw error;
+  }
+}
+
+async function requestReviewBatch(
+  files: SourceFile[],
+  scannerFindings: Finding[],
+  options: {
+    instructions: string;
+    candidates?: Finding[];
+    signal: AbortSignal;
+  },
 ) {
   const model = required("NAN_MODEL");
   const url = new URL(
@@ -227,18 +278,25 @@ async function reviewBatch(
           },
         ],
       }),
-      signal: AbortSignal.timeout(limits.modelTimeoutMs),
+      signal: options.signal,
     },
   );
   if (!response.ok)
     throw new ModelReviewError(
       `Model provider returned ${response.status}. No clean review was produced.`,
+      response.status === 408 ||
+        response.status === 429 ||
+        response.status >= 500,
     );
   const data = await readModelResponse(response);
   const content = data.choices?.[0]?.message?.content;
+  if (data.nan_truncation || data.usage?.nan_truncation)
+    throw new ModelReviewError(
+      "NaN stopped a reasoning-only response before the agent answered. Increasing output tokens cannot override this provider limit. Try smaller batches or a model with controllable reasoning. No clean review was produced.",
+    );
   if (data.choices?.[0]?.finish_reason === "length")
     throw new ModelReviewError(
-      "The model exhausted its output budget before finishing the review. Try a smaller PR or increase modelOutputTokens in src/lib/config.ts. No clean review was produced.",
+      "The model exhausted its output budget before finishing the review. Try a smaller PR or a model with a controllable reasoning budget. No clean review was produced.",
     );
   if (typeof content !== "string" || content.length > 80_000 || !content.trim())
     throw new ModelReviewError(

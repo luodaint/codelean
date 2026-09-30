@@ -4,6 +4,7 @@ import { appUrl, limits, required } from "./config";
 import { getRepository, GitHub, installationClient, repoPath } from "./github";
 import { addedLines, findingSchema, modelReview } from "./review";
 import { securityAudit } from "./security-audit";
+import { ReviewOrchestrator } from "./review-orchestrator";
 import { redact, safePath } from "./security";
 import type {
   Finding,
@@ -443,34 +444,48 @@ export async function processRun(run: Run) {
     await stage(run, "Running static checks");
     const scanned = await scanFiles(source.files);
     await current(run, reader, repo);
-    await stage(run, "Reviewing with NaN");
-    const model = await modelReview(
-      scanned.files,
-      scanned.findings as Finding[],
-      {
-        beforeBatch: async (index, total) => {
-          await current(run, reader, repo);
-          await stage(run, `Reviewing with NaN: batch ${index} of ${total}`);
-        },
-      },
+    const orchestrator = new ReviewOrchestrator((message) =>
+      stage(run, message),
     );
+    const checkCurrent = async () => {
+      await current(run, reader, repo);
+    };
+    const guard = async <T>(work: Promise<T>) => {
+      try {
+        return await work;
+      } catch (error) {
+        orchestrator.abort(error);
+        throw error;
+      }
+    };
+    let model: Awaited<ReturnType<typeof modelReview>>;
+    let security: Awaited<ReturnType<typeof securityAudit>>;
+    try {
+      const [reviewed, audited] = await Promise.allSettled([
+        guard(
+          modelReview(scanned.files, scanned.findings as Finding[], {
+            orchestrator,
+            beforeBatch: checkCurrent,
+          }),
+        ),
+        guard(
+          securityAudit(
+            scanned.files,
+            scanned.findings as Finding[],
+            checkCurrent,
+            checkCurrent,
+            orchestrator,
+          ),
+        ),
+      ]);
+      if (reviewed.status === "rejected" || audited.status === "rejected")
+        throw orchestrator.signal.reason;
+      model = reviewed.value;
+      security = audited.value;
+    } finally {
+      await orchestrator.close();
+    }
     await current(run, reader, repo);
-    await stage(run, "Running PR security audit");
-    const security = await securityAudit(
-      scanned.files,
-      scanned.findings as Finding[],
-      async () => {
-        await current(run, reader, repo);
-        await stage(run, "Verifying security findings");
-      },
-      async (phase, index, total) => {
-        await current(run, reader, repo);
-        await stage(
-          run,
-          `${phase === "discovery" ? "Security audit" : "Security verification"}: batch ${index} of ${total}`,
-        );
-      },
-    );
     const warnings = [
       ...scanned.warnings,
       ...model.warnings,

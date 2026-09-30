@@ -48,18 +48,16 @@ describe("review validation", () => {
   it("reviews all batches, reports limited cross-batch context, and accumulates usage", async () => {
     vi.stubEnv("NAN_API_KEY", "test-key");
     vi.stubEnv("NAN_MODEL", "test-model");
-    const fetcher = vi
-      .fn()
-      .mockImplementation(async () =>
-        Response.json({
-          choices: [
-            {
-              message: { content: '{"summary":"Scoped batch","findings":[]}' },
-            },
-          ],
-          usage: { total_tokens: 10 },
-        }),
-      );
+    const fetcher = vi.fn().mockImplementation(async () =>
+      Response.json({
+        choices: [
+          {
+            message: { content: '{"summary":"Scoped batch","findings":[]}' },
+          },
+        ],
+        usage: { total_tokens: 10 },
+      }),
+    );
     vi.stubGlobal("fetch", fetcher);
     const beforeBatch = vi.fn();
     const inputs = Array.from({ length: 6 }, (_, i) => ({
@@ -193,7 +191,7 @@ describe("review validation", () => {
     );
     const body = JSON.parse(fetcher.mock.calls[0][1].body);
     expect(body.response_format).toEqual({ type: "json_object" });
-    expect(body.max_tokens).toBe(32768);
+    expect(body.max_tokens).toBe(65536);
   });
   it("exposes only a safe message when model output fails schema validation", async () => {
     vi.stubEnv("NAN_API_KEY", "test-key");
@@ -220,6 +218,22 @@ describe("review validation", () => {
     expect(
       JSON.parse(fetcher.mock.calls[0][1].body).response_format,
     ).toBeUndefined();
+  });
+  it("distinguishes the provider reasoning cutoff from output-token exhaustion", async () => {
+    vi.stubEnv("NAN_API_KEY", "test-key");
+    vi.stubEnv("NAN_MODEL", "deepseek-v4-flash");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        Response.json({
+          choices: [{ finish_reason: "length", message: { content: "" } }],
+          nan_truncation: true,
+        }),
+      ),
+    );
+    await expect(modelReview(files, [])).rejects.toThrow(
+      "Increasing output tokens cannot override",
+    );
   });
   it("does not turn scanner outages into empty clean results", async () => {
     vi.stubEnv("SCANNER_URL", "http://scanner:8080");

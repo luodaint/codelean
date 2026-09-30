@@ -97,7 +97,7 @@ calls. A model or skill-loading failure leaves the run incomplete and uses the n
 retry flow. Older runs show that no separate security audit was recorded.
 
 The ordinary review also records its skill versions. `src/lib/config.ts` controls
-`modelOutputTokens` (32,768) and `modelTimeoutMs` (360,000). The output budget includes
+`modelOutputTokens` (65,536) and `modelTimeoutMs` (360,000). The output budget includes
 reasoning, not just the final answer. DeepSeek requests use JSON object mode. A
 truncated answer is rejected and produces a specific error; it never counts as a
 clean review. See [NaN's model contract](https://nan.builders/docs/models).
@@ -112,8 +112,26 @@ are retained. Incomplete streams fail the run instead of publishing partial outp
 
 Large reviews are split into batches targeting 50 KB of serialized source/diff and
 at most five files (`modelBatchBytes` / `modelBatchFiles` in `src/lib/config.ts`).
-A single larger file stays intact in its own batch. Calls run sequentially and
-progress shows the batch number. Skills are frozen once per phase; candidate
+A single larger file stays intact in its own batch. A shared orchestrator runs up
+to five review agents concurrently (`modelConcurrency`). Ordinary review and
+security discovery overlap; security verification waits for discovery candidates
+and uses the same pool. This limit is shared across all phases, not multiplied per
+skill. The database worker lock still allows only one PR run at a time. Live
+progress shows completed/total batches for each specialist and active agents.
+
+The AI phases share a ten-minute deadline (`modelRunTimeoutMs`), in addition to
+the six-minute per-request limit. Failure cancels sibling requests and queued
+batches; results are published only when every required phase succeeds. Timeout,
+truncated output, and invalid structured answers require a manual retry instead
+of automatically repeating the same expensive run. Transient provider HTTP
+errors (408, 429, 5xx) retain the existing bounded worker retry. Completed batches
+are not checkpointed across retries or worker restarts.
+
+The orchestration is deterministic TypeScript in `src/lib/review-orchestrator.ts`,
+using the NaN streaming transport. It does not need a planner model or the OpenAI
+Agents SDK. Agents have no tools or repository write access.
+
+Skills are frozen once per phase; candidate
 verification only visits batches with candidates. Interactions across batches
 are not analyzed together, so multi-batch runs explicitly report partial coverage.
 Token totals combine all successful batch calls; failed attempts are not included.
