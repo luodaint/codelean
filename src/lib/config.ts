@@ -21,6 +21,8 @@ export const limits = {
   comments: 5,
   modelOutputTokens: 32_768,
   modelTimeoutMs: 360_000,
+  modelBatchBytes: 50_000,
+  modelBatchFiles: 5,
 };
 
 export function githubLoginConfigured() {

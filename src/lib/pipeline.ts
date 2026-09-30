@@ -447,6 +447,12 @@ export async function processRun(run: Run) {
     const model = await modelReview(
       scanned.files,
       scanned.findings as Finding[],
+      {
+        beforeBatch: async (index, total) => {
+          await current(run, reader, repo);
+          await stage(run, `Reviewing with NaN: batch ${index} of ${total}`);
+        },
+      },
     );
     await current(run, reader, repo);
     await stage(run, "Running PR security audit");
@@ -456,6 +462,13 @@ export async function processRun(run: Run) {
       async () => {
         await current(run, reader, repo);
         await stage(run, "Verifying security findings");
+      },
+      async (phase, index, total) => {
+        await current(run, reader, repo);
+        await stage(
+          run,
+          `${phase === "discovery" ? "Security audit" : "Security verification"}: batch ${index} of ${total}`,
+        );
       },
     );
     const warnings = [
@@ -472,6 +485,7 @@ export async function processRun(run: Run) {
       ] as Finding[],
       securityAudit: security.audit,
       reviewSkills: model.skills,
+      reviewBatches: model.batches,
       files: source.files.length,
       skipped: source.skipped,
       coverage:

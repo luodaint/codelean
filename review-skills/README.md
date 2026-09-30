@@ -23,11 +23,11 @@ This is not the upstream six-phase repository-wide audit. It does not clone the
 whole target, execute target code, run upstream scripts, spawn tool-using agents,
 produce upstream report-schema artifacts, or establish runtime proof.
 
-Each PR runs a dedicated discovery model call. If it produces valid candidates,
+Each PR runs dedicated discovery model calls over bounded file batches. If it produces valid candidates,
 a fresh model call attempts to disprove them against the same source and retains
 only exact candidates. Findings still need valid added-line evidence. Both calls
 use `NAN_MODEL` and the NaN credentials used by the ordinary review. This adds one
-model call per run, plus one when there are candidates, and increases latency and
+model call per file batch, plus verification calls for batches with candidates, increasing latency and
 provider usage. Source-only verification can still miss or misclassify issues.
 
 ## Included Simplify skill
@@ -109,3 +109,11 @@ reviewed as untrusted code until an operator deploys that revision.
 Model requests use streaming to keep long reasoning responses active through the
 provider proxy. Reasoning text is discarded; only the final answer and token usage
 are retained. Incomplete streams fail the run instead of publishing partial output.
+
+Large reviews are split into batches targeting 50 KB of serialized source/diff and
+at most five files (`modelBatchBytes` / `modelBatchFiles` in `src/lib/config.ts`).
+A single larger file stays intact in its own batch. Calls run sequentially and
+progress shows the batch number. Skills are frozen once per phase; candidate
+verification only visits batches with candidates. Interactions across batches
+are not analyzed together, so multi-batch runs explicitly report partial coverage.
+Token totals combine all successful batch calls; failed attempts are not included.

@@ -4,6 +4,7 @@ import {
   modelReview,
   ModelReviewError,
   outputSchema,
+  reviewBatches,
   systemPrompt,
   validateFindings,
 } from "../src/lib/review";
@@ -29,6 +30,60 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 describe("review validation", () => {
+  it("batches every file exactly once, without splitting source or losing large files", () => {
+    const inputs = Array.from({ length: 7 }, (_, i) => ({
+      ...files[0],
+      path: `file${i}.ts`,
+    }));
+    inputs[2] = { ...inputs[2], content: "x".repeat(60_000) };
+    const batches = reviewBatches(inputs);
+    expect(batches.flat()).toEqual(inputs);
+    expect(
+      batches.some(
+        (batch) => batch.length === 1 && batch[0].path === "file2.ts",
+      ),
+    ).toBe(true);
+    expect(batches.every((batch) => batch.length <= 5)).toBe(true);
+  });
+  it("reviews all batches, reports limited cross-batch context, and accumulates usage", async () => {
+    vi.stubEnv("NAN_API_KEY", "test-key");
+    vi.stubEnv("NAN_MODEL", "test-model");
+    const fetcher = vi
+      .fn()
+      .mockImplementation(async () =>
+        Response.json({
+          choices: [
+            {
+              message: { content: '{"summary":"Scoped batch","findings":[]}' },
+            },
+          ],
+          usage: { total_tokens: 10 },
+        }),
+      );
+    vi.stubGlobal("fetch", fetcher);
+    const beforeBatch = vi.fn();
+    const inputs = Array.from({ length: 6 }, (_, i) => ({
+      ...files[0],
+      path: `file${i}.ts`,
+    }));
+    const result = await modelReview(inputs, [], { beforeBatch });
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(result.tokens).toBe(20);
+    expect(result.batches).toBe(2);
+    expect(result.warnings.join()).toContain("interactions between batches");
+    expect(beforeBatch.mock.calls).toEqual([
+      [1, 2],
+      [2, 2],
+    ]);
+    expect(
+      fetcher.mock.calls
+        .flatMap(
+          (call) =>
+            JSON.parse(JSON.parse(call[1].body).messages[1].content).files,
+        )
+        .map((f) => f.path),
+    ).toEqual(inputs.map((f) => f.path));
+  });
   it("maps added lines through multiple hunks and removed lines", () => {
     expect([
       ...addedLines(

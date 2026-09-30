@@ -77,6 +77,9 @@ export default async function RunPage({
                 <span>{run.result.coverage} coverage</span>
                 <span>{run.tokens.toLocaleString()} tokens</span>
                 <span>{run.model}</span>
+                {run.result.reviewBatches && (
+                  <span>{run.result.reviewBatches} review batches</span>
+                )}
               </div>
               {run.result.reviewSkills?.map((skill) => (
                 <p key={skill.id}>
@@ -92,6 +95,11 @@ export default async function RunPage({
               <p className="prose">{run.result.securityAudit.summary}</p>
               <div className="summary-tags">
                 <span>{run.result.securityAudit.status}</span>
+                {run.result.securityAudit.discoveryBatches && (
+                  <span>
+                    {run.result.securityAudit.discoveryBatches} security batches
+                  </span>
+                )}
                 <span>
                   {run.result.securityAudit.retained} retained findings
                 </span>

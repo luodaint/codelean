@@ -86,17 +86,37 @@ Only suggest changes through findings for inline code comments. Never edit code,
 Report only actionable problems supported by the supplied code. Do not invent missing context. A finding must be on an ADDED line in a supplied patch with an exact evidence substring near that line. Do not report style preferences. Redacted data must not be reconstructed.
 Return one JSON object, no Markdown: {"summary":"...","findings":[{"severity":"critical|high|medium|low","path":"exact/path","line":1,"title":"...","description":"impact and triggering conditions","evidence":"exact code substring","recommendation":"specific fix"}]}. At most 20 findings. Empty findings is valid. Keep the summary under 1000 characters, titles under 180, evidence under 1000, and descriptions and recommendations under 2000 each. Describe the limited scope; do not claim the repository is secure. Focus on concrete candidates rather than exhaustively narrating every non-issue. Finish with the concise JSON result.`;
 
+export function reviewBatches(files: SourceFile[]) {
+  const batches: SourceFile[][] = [];
+  let batch: SourceFile[] = [],
+    bytes = 0;
+  for (const file of files) {
+    const size = Buffer.byteLength(JSON.stringify(file));
+    if (
+      batch.length &&
+      (bytes + size > limits.modelBatchBytes ||
+        batch.length >= limits.modelBatchFiles)
+    ) {
+      batches.push(batch);
+      batch = [];
+      bytes = 0;
+    }
+    batch.push(file);
+    bytes += size;
+  }
+  if (batch.length) batches.push(batch);
+  return batches;
+}
+
 export async function modelReview(
   files: SourceFile[],
   scannerFindings: Finding[],
-  options: { instructions?: string; candidates?: Finding[] } = {},
+  options: {
+    instructions?: string;
+    candidates?: Finding[];
+    beforeBatch?: (index: number, total: number) => Promise<void>;
+  } = {},
 ) {
-  const model = required("NAN_MODEL");
-  const url = new URL(
-    process.env.NAN_BASE_URL || "https://api.nan.builders/v1",
-  );
-  if (url.protocol !== "https:")
-    throw new Error("Model provider must use HTTPS");
   const skills =
     options.instructions === undefined
       ? await loadReviewSkills("review")
@@ -106,6 +126,71 @@ export async function modelReview(
     (skills.instructions
       ? `${skills.instructions}\n\n# Mandatory Codelean execution contract\n${systemPrompt}`
       : systemPrompt);
+  const batches = reviewBatches(files).filter(
+    (batch) =>
+      !options.candidates ||
+      options.candidates.some((f) =>
+        batch.some((file) => file.path === f.path),
+      ),
+  );
+  if (!batches.length)
+    throw new ModelReviewError("No files available for model review.");
+  const results: Awaited<ReturnType<typeof reviewBatch>>[] = [];
+  for (const [index, batch] of batches.entries()) {
+    await options.beforeBatch?.(index + 1, batches.length);
+    const paths = new Set(batch.map((file) => file.path));
+    results.push(
+      await reviewBatch(
+        batch,
+        scannerFindings.filter((f) => paths.has(f.path)),
+        {
+          instructions,
+          candidates: options.candidates?.filter((f) => paths.has(f.path)),
+        },
+      ),
+    );
+  }
+  const warnings = results.flatMap((r) => r.warnings);
+  if (batches.length > 1)
+    warnings.push(
+      `AI review used ${batches.length} file batches; interactions between batches were not analyzed together.`,
+    );
+  const allFindings = results.flatMap((r) => r.findings);
+  if (allFindings.length > limits.findings)
+    warnings.push(
+      "Additional model findings were omitted at the configured finding limit.",
+    );
+  const summary = results
+    .map((r, i) =>
+      results.length > 1 ? `Batch ${i + 1}: ${r.summary}` : r.summary,
+    )
+    .join("\n\n");
+  return {
+    summary:
+      summary.length > 3000
+        ? summary.slice(0, 2920) +
+          "\n\nBatch summaries shortened; findings are listed separately."
+        : summary,
+    findings: allFindings.slice(0, limits.findings),
+    warnings,
+    tokens: results.reduce((n, r) => n + r.tokens, 0),
+    model: results[0].model,
+    skills: skills.versions,
+    batches: batches.length,
+  };
+}
+
+async function reviewBatch(
+  files: SourceFile[],
+  scannerFindings: Finding[],
+  options: { instructions: string; candidates?: Finding[] },
+) {
+  const model = required("NAN_MODEL");
+  const url = new URL(
+    process.env.NAN_BASE_URL || "https://api.nan.builders/v1",
+  );
+  if (url.protocol !== "https:")
+    throw new Error("Model provider must use HTTPS");
   const response = await fetch(
     `${url.toString().replace(/\/$/, "")}/chat/completions`,
     {
@@ -125,7 +210,7 @@ export async function modelReview(
           ? { response_format: { type: "json_object" } }
           : {}),
         messages: [
-          { role: "system", content: instructions },
+          { role: "system", content: options.instructions },
           {
             role: "user",
             content: JSON.stringify({
@@ -186,6 +271,5 @@ export async function modelReview(
         ? data.usage.total_tokens
         : 0,
     model,
-    skills: skills.versions,
   };
 }

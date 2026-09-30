@@ -16,6 +16,11 @@ export async function securityAudit(
   files: SourceFile[],
   scannerFindings: Finding[],
   beforeVerification: () => Promise<void> = async () => {},
+  onBatch: (
+    phase: "discovery" | "verification",
+    index: number,
+    total: number,
+  ) => Promise<void> = async () => {},
 ): Promise<{
   audit: SecurityAuditResult;
   findings: Finding[];
@@ -41,6 +46,7 @@ export async function securityAudit(
   }
   const discovered = await modelReview(files, scannerFindings, {
     instructions: auditPrompt(skills, false),
+    beforeBatch: (index, total) => onBatch("discovery", index, total),
   });
   let verified = discovered;
   if (discovered.findings.length) {
@@ -48,6 +54,7 @@ export async function securityAudit(
     verified = await modelReview(files, scannerFindings, {
       instructions: auditPrompt(skills, true),
       candidates: discovered.findings,
+      beforeBatch: (index, total) => onBatch("verification", index, total),
     });
   }
   // The verifier may only retain exact, already validated candidates. It cannot
@@ -73,6 +80,8 @@ export async function securityAudit(
       model: discovered.model,
       candidates: discovered.findings.length,
       retained: findings.length,
+      discoveryBatches: discovered.batches,
+      verificationBatches: verified === discovered ? 0 : verified.batches,
       verification: discovered.findings.length
         ? "source-model-pass"
         : "no-candidates",
