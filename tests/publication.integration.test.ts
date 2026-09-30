@@ -34,9 +34,20 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
       coverage: "complete",
       warnings: [],
       scanners: ["semgrep"],
+      securityAudit: {
+        status: "completed",
+        scope: "changed-files",
+        summary: "One retained security candidate.",
+        skills: [{ id: "demo", name: "Demo audit", sha256: "a".repeat(64) }],
+        tokens: 24,
+        model: "test-model",
+        candidates: 1,
+        retained: 1,
+        verification: "source-model-pass",
+      },
       findings: [
         {
-          source: "ai",
+          source: "security-audit",
           severity: "high",
           path: "code.js",
           line: 1,
@@ -145,8 +156,23 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
       await publish(run, result, repo, gh);
       expect(checks).toHaveLength(1);
       expect(comments).toHaveLength(1);
+      expect(comments[0].body).toContain("### PR security audit");
+      expect(comments[0].body).toContain("Demo audit");
       expect(reviews).toHaveLength(1);
       expect(writes.find((w) => w.body.event)?.body.event).toBe("COMMENT");
+      expect(writes.find((w) => w.body.event)?.body.comments).toEqual([
+        expect.objectContaining({
+          path: "code.js",
+          line: 1,
+          side: "RIGHT",
+          body: expect.stringContaining("Parse structured input"),
+        }),
+      ]);
+      expect(
+        writes
+          .filter((w) => w.body.event)
+          .every((w) => w.body.event === "COMMENT"),
+      ).toBe(true);
       expect(writes.some((w) => w.body.conclusion === "neutral")).toBe(true);
       const saved = (
         await db().query(

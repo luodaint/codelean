@@ -20,26 +20,27 @@ chmod 600 .env
 
 Setup creates `.env` with random secrets and refuses to overwrite an existing file. Keep it outside version control and protect it in backups. You can also configure variables in Dokploy's protected environment editor without a server-side Node installation; generate independent 32-byte random secrets there/with your password manager and use `.env.example` as the field reference. Do not paste private credentials into an agent conversation.
 
-| Variable                                   | Configuration                                                                           |
-| ------------------------------------------ | --------------------------------------------------------------------------------------- |
-| `APP_URL`                                  | Canonical public origin, e.g. `https://codelean.dev`; no trailing slash                 |
-| `APP_DOMAIN`                               | Same hostname without scheme, for the supplied Traefik override                         |
-| `SIGNUP_MODE`                              | `open` (default) for self-service GitHub signup; `restricted` for a private pilot       |
-| `ADMIN_EMAILS`                             | Optional restricted-mode allowlist; also used once to migrate existing workspace owners |
-| `BETTER_AUTH_SECRET`                       | Generated random secret, at least 32 characters                                         |
-| `DEV_AUTH_BYPASS`                          | `false` on servers; Compose forces this value                                           |
-| `SMTP_HOST`, `SMTP_PORT`                   | Your SMTP server; usually port 587                                                      |
-| `SMTP_SECURE`                              | `true` for implicit TLS, usually 465; `false` uses mandatory STARTTLS                   |
-| `SMTP_USER`, `SMTP_PASSWORD`, `EMAIL_FROM` | SMTP credentials and verified sender; use an application credential                     |
-| `POSTGRES_PASSWORD`                        | Generated database password; use hex/alphanumeric or URL-encode a custom password       |
-| `DATABASE_URL`                             | Used by host-run Node commands; Compose constructs its own internal URL                 |
-| `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` | GitHub App user authorization credentials for sign-in; Client ID differs from App ID    |
-| `GITHUB_APP_ID`, `GITHUB_APP_SLUG`         | Dedicated GitHub App numeric ID and URL slug                                            |
-| `GITHUB_PRIVATE_KEY_BASE64`                | Base64-encoded PEM key in one line; still a secret                                      |
-| `GITHUB_WEBHOOK_SECRET`                    | Same generated value configured in GitHub                                               |
-| `NAN_BASE_URL`                             | `https://api.nan.builders/v1`, or an explicitly trusted HTTPS-compatible provider       |
-| `NAN_API_KEY`, `NAN_MODEL`                 | Provider credential and exact model ID from your account                                |
-| `SCANNER_TOKEN`                            | Generated shared scanner credential; Compose supplies the private scanner URL           |
+| Variable                                   | Configuration                                                                                |
+| ------------------------------------------ | -------------------------------------------------------------------------------------------- |
+| `APP_URL`                                  | Canonical public origin, e.g. `https://codelean.dev`; no trailing slash                      |
+| `APP_DOMAIN`                               | Same hostname without scheme, for the supplied Traefik override                              |
+| `SIGNUP_MODE`                              | `open` (default) for self-service GitHub signup; `restricted` for a private pilot            |
+| `ADMIN_EMAILS`                             | Optional restricted-mode allowlist; also used once to migrate existing workspace owners      |
+| `BETTER_AUTH_SECRET`                       | Generated random secret, at least 32 characters                                              |
+| `DEV_AUTH_BYPASS`                          | `false` on servers; Compose forces this value                                                |
+| `SMTP_HOST`, `SMTP_PORT`                   | Your SMTP server; usually port 587                                                           |
+| `SMTP_SECURE`                              | `true` for implicit TLS, usually 465; `false` uses mandatory STARTTLS                        |
+| `SMTP_USER`, `SMTP_PASSWORD`, `EMAIL_FROM` | SMTP credentials and verified sender; use an application credential                          |
+| `POSTGRES_PASSWORD`                        | Generated database password; use hex/alphanumeric or URL-encode a custom password            |
+| `DATABASE_URL`                             | Used by host-run Node commands; Compose constructs its own internal URL                      |
+| `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` | GitHub App user authorization credentials for sign-in; Client ID differs from App ID         |
+| `GITHUB_APP_ID`, `GITHUB_APP_SLUG`         | Dedicated GitHub App numeric ID and URL slug                                                 |
+| `GITHUB_PRIVATE_KEY_BASE64`                | Base64-encoded PEM key in one line; still a secret                                           |
+| `GITHUB_WEBHOOK_SECRET`                    | Same generated value configured in GitHub                                                    |
+| `NAN_BASE_URL`                             | `https://api.nan.builders/v1`, or an explicitly trusted HTTPS-compatible provider            |
+| `NAN_API_KEY`, `NAN_MODEL`                 | Provider credential and exact model ID from your account                                     |
+| `NAN_FALLBACK_MODEL`                       | Optional model for NaN reasoning-only cutoffs (e.g. `glm5.3-flash`); empty disables fallback |
+| `SCANNER_TOKEN`                            | Generated shared scanner credential; Compose supplies the private scanner URL                |
 
 For a PEM key, encode it locally and copy through a secure channel; avoid logging the output in automation. The application never requests your personal GitHub access token. The configured NaN model must support chat completions and returning JSON. [NaN documents its API](https://nan.builders/docs); the app validates JSON itself and does not depend on a provider-specific structured-output flag.
 

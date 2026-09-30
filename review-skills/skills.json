@@ -1,0 +1,16 @@
+[
+  {
+    "id": "cloudflare-security-audit",
+    "name": "Cloudflare security audit (PR-focused)",
+    "enabled": true,
+    "phase": "security-audit",
+    "files": ["SKILL.md", "upstream/ATTACK-CLASSES.md"]
+  },
+  {
+    "id": "simplify",
+    "name": "Simplify (PR review adapter)",
+    "enabled": true,
+    "phase": "review",
+    "files": ["SKILL.md"]
+  }
+]

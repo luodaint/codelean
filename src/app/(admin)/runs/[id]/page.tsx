@@ -77,9 +77,63 @@ export default async function RunPage({
                 <span>{run.result.coverage} coverage</span>
                 <span>{run.tokens.toLocaleString()} tokens</span>
                 <span>{run.model}</span>
+                {run.result.reviewBatches && (
+                  <span>{run.result.reviewBatches} review batches</span>
+                )}
               </div>
+              {run.result.reviewSkills?.map((skill) => (
+                <p key={skill.id}>
+                  {skill.name} · skill version{" "}
+                  <code title={skill.sha256}>{skill.sha256.slice(0, 12)}</code>
+                </p>
+              ))}
             </div>
           </section>
+          {run.result.securityAudit ? (
+            <section className="panel workspace-panel">
+              <h2>PR security audit</h2>
+              <p className="prose">{run.result.securityAudit.summary}</p>
+              <div className="summary-tags">
+                <span>{run.result.securityAudit.status}</span>
+                {run.result.securityAudit.discoveryBatches && (
+                  <span>
+                    {run.result.securityAudit.discoveryBatches} security batches
+                  </span>
+                )}
+                <span>
+                  {run.result.securityAudit.retained} retained findings
+                </span>
+                <span>
+                  {run.result.securityAudit.tokens.toLocaleString()} tokens
+                </span>
+                {run.result.securityAudit.model && (
+                  <span>{run.result.securityAudit.model}</span>
+                )}
+                <span>
+                  {run.result.securityAudit.verification === "source-model-pass"
+                    ? "Separate source verification pass"
+                    : run.result.securityAudit.verification === "no-candidates"
+                      ? "No candidates to verify"
+                      : "Verification not run"}
+                </span>
+              </div>
+              <p>
+                Reviews the supplied changed files and added lines. Does not
+                execute code or audit the whole repository.
+              </p>
+              {run.result.securityAudit.skills.map((skill) => (
+                <p key={skill.id}>
+                  {skill.name} · skill version{" "}
+                  <code title={skill.sha256}>{skill.sha256.slice(0, 12)}</code>
+                </p>
+              ))}
+            </section>
+          ) : (
+            <p className="help-text">
+              The separate PR security audit was not recorded for this run.
+              Earlier reviews are not retroactively audited.
+            </p>
+          )}
           <div className="section-title">
             <h2>
               Findings <span>{run.result.findings.length}</span>
@@ -103,7 +157,11 @@ export default async function RunPage({
                   {finding.severity}
                 </span>
                 <span className="muted">
-                  {finding.source === "ai" ? "AI review" : finding.source}
+                  {finding.source === "ai"
+                    ? "AI review"
+                    : finding.source === "security-audit"
+                      ? "PR security audit"
+                      : finding.source}
                 </span>
               </div>
               <h3>{finding.title}</h3>

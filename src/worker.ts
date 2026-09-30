@@ -2,6 +2,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { db } from "./lib/db";
 import { processRun, reportFailure, Superseded } from "./lib/pipeline";
 import type { Run } from "./lib/types";
+import { ModelReviewError } from "./lib/review";
 
 let stopping = false;
 process.on("SIGTERM", () => {
@@ -53,7 +54,7 @@ console.log("Codelean review worker ready (concurrency 1)");
 try {
   while (!stopping) {
     const run = (
-      await pool.query<Run>(`UPDATE runs SET status='running', stage='Starting review', started_at=now(), attempts=attempts+1
+      await pool.query<Run>(`UPDATE runs SET status='running', stage='Starting review', error=NULL, started_at=now(), attempts=attempts+1
       WHERE id=(SELECT id FROM runs WHERE status='queued' AND available_at<=now() ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT 1) RETURNING *`)
     ).rows[0];
     if (!run) {
@@ -69,13 +70,19 @@ try {
         ])
       ).rows[0]?.publication_started;
       const cancelled = error instanceof Superseded;
-      const retry = !cancelled && !uncertain && run.attempts < 3;
+      const retry =
+        !cancelled &&
+        !uncertain &&
+        run.attempts < 3 &&
+        (!(error instanceof ModelReviewError) || error.retryable);
       // Do not store provider response bodies, repository code, or arbitrary error strings.
       const message = cancelled
         ? "This revision is no longer current."
         : uncertain
           ? "Publication interrupted. Retry reconciles existing GitHub output before continuing."
-          : "Review failed. Check service configuration, provider availability, and scanner health; no clean result was produced.";
+          : error instanceof ModelReviewError
+            ? error.message
+            : "Review failed. Check service configuration, provider availability, and scanner health; no clean result was produced.";
       await pool.query(
         `UPDATE runs SET status=$2, stage=$3, error=$4, available_at=now()+interval '60 seconds', completed_at=CASE WHEN $2='queued' THEN NULL ELSE now() END WHERE id=$1 AND status='running'`,
         [
