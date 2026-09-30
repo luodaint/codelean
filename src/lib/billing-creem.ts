@@ -159,43 +159,46 @@ export async function createBillingCheckout(
     }
     const id = randomUUID();
     await c.query(
-      "INSERT INTO billing_checkouts(id,organization_id,kind,customer_id) VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING",
+      "INSERT INTO billing_checkouts(id,organization_id,kind,customer_id) VALUES($1,$2,$3,$4)",
       [id, organizationId, kind, customerId],
     );
-    try {
-      const checkout = await creemRequest<{ id: string; checkout_url: string }>(
-        "/checkouts",
-        "POST",
-        {
-          request_id: id,
-          product_id: required(
-            kind === "plan"
-              ? "CREEM_PLAN_PRODUCT_ID"
-              : "CREEM_TOKEN_PRODUCT_ID",
-          ),
-          customer: { id: customerId },
-          success_url: `${appUrl()}/billing?checkout=returned`,
-          metadata: { organization_id: organizationId, billing_request_id: id },
-        },
-      );
-      const url = creemRedirect(checkout.checkout_url);
-      await c.query(
-        "UPDATE billing_checkouts SET checkout_id=$2,checkout_url=$3 WHERE id=$1",
-        [id, checkout.id, url],
-      );
-      return url;
-    } catch {
-      // Commit the intent on ambiguous provider failures. Never create another
-      // payable session just because the first response was lost.
-      await c.query(
-        "UPDATE billing_accounts SET hold_reason='Checkout creation needs provider reconciliation.' WHERE organization_id=$1",
-        [organizationId],
-      );
-      return null;
-    }
+    return { id, customerId };
   });
   if (!outcome) throw new Error("Billing setup needs provider reconciliation.");
-  return outcome;
+  if (typeof outcome === "string") return outcome;
+  // A payable session is created only after its local intent has committed.
+  try {
+    const checkout = await creemRequest<{ id: string; checkout_url: string }>(
+      "/checkouts",
+      "POST",
+      {
+        request_id: outcome.id,
+        product_id: required(
+          kind === "plan" ? "CREEM_PLAN_PRODUCT_ID" : "CREEM_TOKEN_PRODUCT_ID",
+        ),
+        customer: { id: outcome.customerId },
+        success_url: `${appUrl()}/billing?checkout=returned`,
+        metadata: {
+          organization_id: organizationId,
+          billing_request_id: outcome.id,
+        },
+      },
+    );
+    const url = creemRedirect(checkout.checkout_url);
+    await db().query(
+      "UPDATE billing_checkouts SET checkout_id=$2,checkout_url=$3 WHERE id=$1",
+      [outcome.id, checkout.id, url],
+    );
+    return url;
+  } catch {
+    // The intent already committed before the provider call. Never create another
+    // payable session just because the first response was lost.
+    await db().query(
+      "UPDATE billing_accounts SET hold_reason='Checkout creation needs provider reconciliation.' WHERE organization_id=$1 AND hold_reason IS NULL",
+      [organizationId],
+    );
+    throw new Error("Billing setup needs provider reconciliation.");
+  }
 }
 
 function validDate(value: unknown) {

@@ -468,18 +468,23 @@ suite("billing PostgreSQL integration", () => {
       throw new Error("Unexpected call");
     });
     vi.stubGlobal("fetch", fetcher);
-    expect(
-      await Promise.all(
-        [1, 2].map(() =>
-          createBillingCheckout(
-            organizationId,
-            "owner@example.test",
-            "Test",
-            "tokens",
-          ),
+    const outcomes = await Promise.allSettled(
+      [1, 2].map(() =>
+        createBillingCheckout(
+          organizationId,
+          "owner@example.test",
+          "Test",
+          "tokens",
         ),
       ),
-    ).toEqual(["https://creem.io/new", "https://creem.io/new"]);
+    );
+    const successes = outcomes.filter((r) => r.status === "fulfilled");
+    expect(successes.length).toBeGreaterThanOrEqual(1);
+    for (const outcome of outcomes) {
+      if (outcome.status === "fulfilled")
+        expect(outcome.value).toBe("https://creem.io/new");
+      else expect(outcome.reason.message).toContain("reconciliation");
+    }
     expect(
       fetcher.mock.calls.filter(([url]) => url.endsWith("/checkouts")),
     ).toHaveLength(1);
@@ -491,6 +496,71 @@ suite("billing PostgreSQL integration", () => {
         )
       ).rows[0].expired_at,
     ).not.toBeNull();
+  });
+  it("keeps checkout intent when saving a successful provider response fails", async () => {
+    const fetcher = vi.fn(async (url: string) => {
+      if (url.endsWith("/products/prod_plan"))
+        return Response.json(planDefinition("mtr_test"));
+      if (url.endsWith("/products/prod_tokens"))
+        return Response.json({
+          price: 500,
+          currency: "USD",
+          billing_type: "onetime",
+        });
+      if (url.endsWith("/checkouts")) {
+        // Separate connection sees the committed intent before payment creation.
+        expect(
+          (
+            await db().query(
+              "SELECT count(*)::int AS n FROM billing_checkouts WHERE organization_id=$1",
+              [organizationId],
+            )
+          ).rows[0].n,
+        ).toBe(1);
+        return Response.json({
+          id: "ch_fail_save",
+          checkout_url: "https://creem.io/new",
+        });
+      }
+      throw new Error("Unexpected call");
+    });
+    vi.stubGlobal("fetch", fetcher);
+    await db().query(
+      "ALTER TABLE billing_checkouts ADD CONSTRAINT test_reject_checkout CHECK (checkout_id IS DISTINCT FROM 'ch_fail_save')",
+    );
+    try {
+      await expect(
+        createBillingCheckout(
+          organizationId,
+          "owner@example.test",
+          "Test",
+          "tokens",
+        ),
+      ).rejects.toThrow("reconciliation");
+    } finally {
+      await db().query(
+        "ALTER TABLE billing_checkouts DROP CONSTRAINT test_reject_checkout",
+      );
+    }
+    expect(
+      (
+        await db().query(
+          "SELECT count(*)::int AS n FROM billing_checkouts WHERE organization_id=$1 AND checkout_id IS NULL",
+          [organizationId],
+        )
+      ).rows[0].n,
+    ).toBe(1);
+    await expect(
+      createBillingCheckout(
+        organizationId,
+        "owner@example.test",
+        "Test",
+        "tokens",
+      ),
+    ).rejects.toThrow("operator attention");
+    expect(
+      fetcher.mock.calls.filter(([url]) => url.endsWith("/checkouts")),
+    ).toHaveLength(1);
   });
   it("ignores late events for a replaced subscription even with a newer timestamp", async () => {
     const oldId = `sub_${organizationId}`;
@@ -552,7 +622,7 @@ suite("billing PostgreSQL integration", () => {
         [repositoryId],
       )
     ).rows[0].id;
-    await expect(retry(queued)).resolves.toBeUndefined();
+    await expect(retry(queued)).rejects.toThrow("NEXT_REDIRECT");
   });
   it("recovers a complimentary grant after cancellation succeeds but the local commit fails", async () => {
     let remoteStatus = "active";

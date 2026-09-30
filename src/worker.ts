@@ -6,6 +6,7 @@ import { ModelReviewError } from "./lib/review";
 import { BillingBlocked, billingEnabled } from "./lib/billing-policy";
 import { recoverBillingReservations } from "./lib/billing";
 import { flushBillingOutbox } from "./lib/billing-creem";
+import { pruneReviewCheckpoints } from "./lib/review-checkpoints";
 
 let stopping = false;
 process.on("SIGTERM", () => {
@@ -36,6 +37,7 @@ await pool.query(`UPDATE runs SET status=CASE WHEN publication_started THEN 'fai
   stage='Recovered after worker interruption', error=CASE WHEN publication_started THEN 'Publication may have partially succeeded. Use Retry to reconcile existing GitHub output.' ELSE NULL END WHERE status='running'`);
 await recoverBillingReservations();
 let heartbeatBusy = false;
+let lastCheckpointCleanup = 0;
 async function heartbeat() {
   if (heartbeatBusy) return;
   heartbeatBusy = true;
@@ -43,6 +45,14 @@ async function heartbeat() {
     await lock.query(
       "INSERT INTO worker_heartbeats(name) VALUES ('review') ON CONFLICT(name) DO UPDATE SET last_seen=now()",
     );
+    if (Date.now() - lastCheckpointCleanup >= 60 * 60 * 1000) {
+      try {
+        await pruneReviewCheckpoints();
+        lastCheckpointCleanup = Date.now();
+      } catch {
+        console.error("Checkpoint retention cleanup failed; will retry");
+      }
+    }
   } catch {
     console.error("Worker heartbeat failed");
     process.exit(1);

@@ -46,12 +46,14 @@ function form(enabled = true) {
 }
 it("turns expected billing errors into a repository notice without updating settings", async () => {
   const message = "This workspace allows 10 enabled repositories.";
-  mocks.limit.mockRejectedValueOnce(new BillingBlocked(message));
+  mocks.limit.mockRejectedValueOnce(
+    new BillingBlocked(message, "repository-limit"),
+  );
   await expect(updateRepository(form())).rejects.toThrow(
     "REDIRECT:/repositories?billingError=",
   );
   expect(mocks.redirect).toHaveBeenCalledWith(
-    `/repositories?billingError=${encodeURIComponent(message)}`,
+    "/repositories?billingError=repository-limit",
   );
   expect(mocks.query).not.toHaveBeenCalled();
   expect(mocks.revalidate).not.toHaveBeenCalled();

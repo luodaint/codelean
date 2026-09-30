@@ -8,7 +8,7 @@ if (!process.argv.includes("--apply")) {
     JSON.stringify(
       {
         plan: planDefinition("<meter-id>"),
-        pack: { price: 500, tokens: 10_000_000 },
+        pack: { price: pricing.packCents, tokens: Number(pricing.packTokens) },
         instructions:
           "Use --apply with a test API key. Live setup additionally requires --live and CREEM_TEST_MODE=false.",
       },
@@ -62,7 +62,7 @@ if (!process.argv.includes("--apply")) {
         name: "Codelean 10M tokens",
         description:
           "10 million additional review tokens. Requires an active Codelean subscription. Unused tokens carry forward.",
-        price: 500,
+        price: pricing.packCents,
         currency: "USD",
         billing_type: "onetime",
         tax_mode: "exclusive",

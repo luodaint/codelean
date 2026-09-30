@@ -1,8 +1,14 @@
-import { required } from "@/lib/config";
 import { verifyCreemSignature } from "@/lib/creem";
 import { handleCreemEvent } from "@/lib/billing-creem";
+import { ZodError } from "zod";
 export const runtime = "nodejs";
 export async function POST(request: Request) {
+  const secret = process.env.CREEM_WEBHOOK_SECRET;
+  if (!secret)
+    return Response.json(
+      { error: "Billing webhooks are not configured" },
+      { status: 503 },
+    );
   const reader = request.body?.getReader();
   if (!reader) return new Response(null, { status: 400 });
   const chunks: Uint8Array[] = [];
@@ -22,7 +28,7 @@ export async function POST(request: Request) {
     !verifyCreemSignature(
       body,
       request.headers.get("creem-signature") || "",
-      required("CREEM_WEBHOOK_SECRET"),
+      secret,
     )
   )
     return Response.json({ error: "Invalid signature" }, { status: 401 });
@@ -35,10 +41,17 @@ export async function POST(request: Request) {
   try {
     await handleCreemEvent(event);
     return Response.json({ received: true });
-  } catch {
+  } catch (error) {
+    const invalid = error instanceof ZodError;
+    // Never log signed payloads, customer data, credentials or provider bodies.
+    console.error(
+      invalid
+        ? "Creem webhook schema validation failed"
+        : "Creem webhook processing requires reconciliation",
+    );
     return Response.json(
       { error: "Billing event needs retry or reconciliation" },
-      { status: 503 },
+      { status: invalid ? 400 : 503 },
     );
   }
 }

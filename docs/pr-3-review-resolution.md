@@ -31,3 +31,25 @@ Reviewed the five inline threads and all 22 findings in the Codelean report for 
 Provider references: [product schema](https://docs.creem.io/api-reference/endpoint/create-product), including the expanded `usage_prices.unit_price` definition; [checkout lifecycle](https://docs.creem.io/api-reference/endpoint/get-checkout). Provider mode, product pricing and a sandbox renewal invoice must still be verified before live billing is enabled; no live Creem credentials or products were changed during this review.
 
 The PR also includes the subsequent checkpoint/retry improvements, atomic checkpoint cleanup, separate fallback timeouts, protected-owner repository exemption and inline repository billing notices. Validation: full PostgreSQL-backed application suite, scanner tests, TypeScript checks and production build.
+
+## Follow-up review of `ff146de`
+
+The second review completed successfully. Its confirmed follow-ups are addressed as follows:
+
+- Checkout intent now commits before creating a payable session. A test forces the subsequent database save to fail and confirms the intent survives and a second session is blocked. Removed the unnecessary conflict-ignore clause. Customer creation uses a stable external identity; ambiguous customer creation remains held for reconciliation.
+- Repository and retry alerts use fixed, application-owned messages selected by codes. Query text is never displayed as trusted billing instructions. Ineligible retries receive feedback rather than silently doing nothing.
+- Migration 007 adds a partial pending-outbox index. The documented maintenance window applies to normal index creation as well as the earlier bigint conversion.
+- Failed/cancelled checkpoints expire after 30 days, checked by the worker at startup and hourly. Active/queued work remains protected; completed results still remove checkpoints immediately.
+- Setup preview/product pack amounts and billing display/consent amounts use shared pricing constants. Operator searches escape SQL LIKE metacharacters.
+- Invalid signed webhook schemas return 400; retryable or reconciliation failures retain 503. Sanitized diagnostics never log signed payloads or arbitrary provider errors.
+
+The remaining claims do not establish defects in this release:
+
+- Test mode is a deliberate fail-safe default. Live deployment explicitly requires switching modes and verifying products/invoices. Missing webhook configuration fails closed with an explicit 503 before processing; `creemConfigured` disables checkout. Tests cover both missing configuration and forged signatures. An empty secret is never used to accept callbacks.
+- Unset customer caps and the protected owner exemption are explicit product requirements. Shared-quota enforcement and the documented identity recovery procedure remain in place.
+- The checkpoint phase constraint enforces the application's phase vocabulary; a future phase change must ship a migration. `runs.result` is written only as the final validated aggregate by `saveReviewResult`; there is no intermediate/error-result writer to trigger early cleanup.
+- Checkout fulfillment locks and checks the checkout row's `completed_at`, independently of webhook event ID. Synthetic reconciliation IDs cannot double-grant tokens; integration coverage exercises duplicate fulfillment with different IDs.
+- Both grant preparation and finalization call `billingAccount(..., c)`, which takes `FOR UPDATE`. Concurrent completion cannot duplicate the final audit record. Pending intent makes an interrupted external cancellation recoverable.
+- `billingAccounts` explicitly maps results back to input workspace IDs, preserving order. An index-based display cannot silently associate another workspace's billing state.
+- Reconciliation is an operator-run, per-row error-isolated script with bounded provider requests, not a scheduled cron job with an assumed window. Scaling it to thousands of accounts and further parallelizing the few dashboard reads are performance options, not demonstrated failures in the requested small deployment.
+- Product configuration is deliberately revalidated before each checkout to fail closed against a provider-side price change. URL validation on stored checkout links is likewise intentional.

@@ -16,7 +16,7 @@ export default async function SuperAdmin({
   const workspaces = (
     await db().query(
       `SELECT o.id,o.name,string_agg(DISTINCT u.email,', ') AS owners FROM organization o LEFT JOIN member m ON m."organizationId"=o.id AND m.role='owner' LEFT JOIN "user" u ON u.id=m."userId" WHERE o.name ILIKE $1 OR u.email ILIKE $1 OR u."githubUsername" ILIKE $1 GROUP BY o.id ORDER BY o.name LIMIT 50`,
-      [`%${q.slice(0, 100)}%`],
+      [`%${q.slice(0, 100).replace(/[\\%_]/g, "\\$&")}%`],
     )
   ).rows;
   const accounts = await billingAccounts(workspaces.map((w) => w.id));

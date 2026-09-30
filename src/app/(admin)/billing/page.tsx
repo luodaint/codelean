@@ -25,6 +25,11 @@ export default async function Billing({
   const b = await billingAccount(workspace.id);
   const params = await searchParams;
   const free = complimentary(b);
+  const monthlyPrice = (pricing.monthlyCents / 100).toFixed(2);
+  const packPrice = (pricing.packCents / 100).toFixed(2);
+  const overagePrice = usageDollars(1_000_000n);
+  const includedMillions = Number(pricing.includedTokens) / 1_000_000;
+  const packMillions = Number(pricing.packTokens) / 1_000_000;
   const owner = workspace.role === "owner";
   const configured = creemConfigured();
   const paid = Boolean(
@@ -65,11 +70,15 @@ export default async function Billing({
         <p className="notice danger">{b.hold_reason}</p>
       )}
       <section className="panel workspace-panel">
-        <h2>{free ? "Complimentary access" : "Codelean · $10 / month"}</h2>
+        <h2>
+          {free
+            ? "Complimentary access"
+            : `Codelean · $${monthlyPrice} / month`}
+        </h2>
         <p>
           {free
             ? "Your workspace pays nothing for the subscription or review usage. Service capacity limits still apply."
-            : "20 million review tokens per month. All review features included. Additional usage costs $0.50 per million tokens, plus applicable taxes."}
+            : `${includedMillions} million review tokens per month. All review features included. Additional usage costs $${overagePrice} per million tokens, plus applicable taxes.`}
         </p>
         {b.owner_exempt && (
           <p className="notice success">Permanent owner exemption · mllopart</p>
@@ -104,9 +113,9 @@ export default async function Billing({
             <form action={checkout} className="workspace-form">
               <input type="hidden" name="kind" value="plan" />
               <label>
-                <input type="checkbox" name="accept" required /> I accept
-                $10/month and $0.50 per million additional tokens. Extra-usage
-                limit:{" "}
+                <input type="checkbox" name="accept" required /> I accept $
+                {monthlyPrice}/month and ${overagePrice} per million additional
+                tokens. Extra-usage limit:{" "}
                 {b.extra_limit_cents === null
                   ? "not set"
                   : `$${(Number(b.extra_limit_cents) / 100).toFixed(2)}`}
@@ -189,9 +198,9 @@ export default async function Billing({
           <p>
             Leave blank for no cap. Set $0 to use only included and purchased
             tokens. This limits additional usage per subscription period,
-            excluding the $10 plan, manual purchases and taxes. Lowering it
-            stops new reservations; work already authorized can still finish at
-            its previously reserved amount.
+            excluding the ${monthlyPrice} plan, manual purchases and taxes.
+            Lowering it stops new reservations; work already authorized can
+            still finish at its previously reserved amount.
           </p>
           {owner ? (
             <form action={setLimit} className="workspace-form">
@@ -217,7 +226,9 @@ export default async function Billing({
       )}
       {!free && (
         <section className="panel workspace-panel">
-          <h2>Add 10 million tokens · $5</h2>
+          <h2>
+            Add {packMillions} million tokens · ${packPrice}
+          </h2>
           <p>
             Used after your monthly allowance and before metered overage. Tokens
             carry forward without expiry; an active subscription is required to
@@ -227,8 +238,9 @@ export default async function Billing({
             <form action={checkout} className="workspace-form">
               <input type="hidden" name="kind" value="tokens" />
               <label>
-                <input type="checkbox" name="accept" required /> Buy 10 million
-                additional tokens for $5 plus applicable tax.
+                <input type="checkbox" name="accept" required /> Buy{" "}
+                {packMillions} million additional tokens for ${packPrice} plus
+                applicable tax.
               </label>
               <Submit className="button">Buy tokens with Creem</Submit>
             </form>

@@ -15,7 +15,10 @@ import {
   saveReviewResult,
   withReviewBilling,
 } from "../src/lib/billing";
-import { withReviewCheckpoints } from "../src/lib/review-checkpoints";
+import {
+  withReviewCheckpoints,
+  pruneReviewCheckpoints,
+} from "../src/lib/review-checkpoints";
 import { modelReview } from "../src/lib/review";
 import {
   ReviewOrchestrator,
@@ -259,6 +262,45 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
       await db().query("UPDATE runs SET status='completed' WHERE id=$1", [
         run.id,
       ]);
+      expect(
+        (
+          await db().query("SELECT 1 FROM review_checkpoints WHERE run_id=$1", [
+            run.id,
+          ])
+        ).rowCount,
+      ).toBe(0);
+    });
+    it("expires only old terminal checkpoints and preserves queued, running, and recent work", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () => answer()),
+      );
+      await execute();
+      for (const status of ["queued", "running", "failed"]) {
+        await db().query(
+          "UPDATE runs SET status=$2,completed_at=now()-interval '1 day' WHERE id=$1",
+          [run.id, status],
+        );
+        if (status !== "failed")
+          await db().query(
+            "UPDATE runs SET completed_at=now()-interval '31 days' WHERE id=$1",
+            [run.id],
+          );
+        await pruneReviewCheckpoints();
+        expect(
+          (
+            await db().query(
+              "SELECT 1 FROM review_checkpoints WHERE run_id=$1",
+              [run.id],
+            )
+          ).rowCount,
+        ).toBe(2);
+      }
+      await db().query(
+        "UPDATE runs SET completed_at=now()-interval '31 days' WHERE id=$1",
+        [run.id],
+      );
+      await pruneReviewCheckpoints();
       expect(
         (
           await db().query("SELECT 1 FROM review_checkpoints WHERE run_id=$1", [

@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { createHmac } from "node:crypto";
+import { z } from "zod";
 const mocks = vi.hoisted(() => ({
   user: vi.fn(),
   mutation: vi.fn(),
@@ -63,6 +65,24 @@ describe("billing authorization boundaries", () => {
       user: { id: "owner" },
     });
   });
+  it("fails closed when the webhook secret is missing", async () => {
+    vi.stubEnv("CREEM_WEBHOOK_SECRET", "");
+    try {
+      expect(
+        (
+          await POST(
+            new Request("http://localhost/api/webhooks/creem", {
+              method: "POST",
+              body: "{}",
+            }),
+          )
+        ).status,
+      ).toBe(503);
+      expect(mocks.event).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
   it("rejects forged webhooks before they reach payment fulfillment", async () => {
     vi.stubEnv("CREEM_WEBHOOK_SECRET", "test-secret");
     try {
@@ -76,6 +96,29 @@ describe("billing authorization boundaries", () => {
       expect(response.status).toBe(401);
       expect(mocks.event).not.toHaveBeenCalled();
     } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+  it("distinguishes signed invalid payloads from retryable handler failures without logging payloads", async () => {
+    vi.stubEnv("CREEM_WEBHOOK_SECRET", "test-secret");
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    const raw = JSON.stringify({ id: "private-event" });
+    const sig = createHmac("sha256", "test-secret").update(raw).digest("hex");
+    const request = () =>
+      new Request("http://localhost/api/webhooks/creem", {
+        method: "POST",
+        body: raw,
+        headers: { "creem-signature": sig },
+      });
+    try {
+      const parsed = z.object({ required: z.string() }).safeParse({});
+      mocks.event.mockRejectedValueOnce(parsed.error);
+      expect((await POST(request())).status).toBe(400);
+      mocks.event.mockRejectedValueOnce(new Error("private-provider-details"));
+      expect((await POST(request())).status).toBe(503);
+      expect(JSON.stringify(log.mock.calls)).not.toContain("private");
+    } finally {
+      log.mockRestore();
       vi.unstubAllEnvs();
     }
   });

@@ -137,6 +137,7 @@ export async function assertRepositoryLimit(
   if (count >= b.repository_limit)
     throw new BillingBlocked(
       `This workspace allows ${b.repository_limit} enabled repositories.`,
+      "repository-limit",
     );
 }
 

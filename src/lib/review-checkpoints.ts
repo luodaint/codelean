@@ -7,6 +7,15 @@ import type { ReviewPhase } from "./review-orchestrator";
 type Scope = Pick<Run, "id" | "repository_id" | "head_sha" | "base_sha">;
 const context = new AsyncLocalStorage<Scope>();
 
+export async function pruneReviewCheckpoints() {
+  // Only terminal, unfinished reviews age out. Lock run rows so a concurrent
+  // manual retry cannot change their state while its checkpoints are removed.
+  await db().query(`DELETE FROM review_checkpoints WHERE run_id IN (
+    SELECT id FROM runs WHERE status IN ('failed','cancelled') AND result IS NULL
+    AND completed_at < now()-interval '30 days' FOR UPDATE SKIP LOCKED
+  )`);
+}
+
 export function withReviewCheckpoints<T>(run: Scope, task: () => Promise<T>) {
   return context.run(
     {

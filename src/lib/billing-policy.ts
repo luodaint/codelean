@@ -16,7 +16,15 @@ export function isOperator(user: { githubId?: string | null }) {
 export function billingEnabled() {
   return process.env.BILLING_ENABLED !== "false";
 }
-export class BillingBlocked extends Error {}
+export class BillingBlocked extends Error {
+  constructor(
+    message: string,
+    readonly code:
+      "billing-access" | "repository-limit" | "queue-limit" = "billing-access",
+  ) {
+    super(message);
+  }
+}
 
 export function allocateTokens(
   tokens: bigint,

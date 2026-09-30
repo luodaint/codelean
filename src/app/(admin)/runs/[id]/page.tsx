@@ -10,15 +10,27 @@ import { Submit } from "@/components/submit";
 import { retryRun } from "@/app/actions";
 export default async function RunPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ retryError?: string }>;
 }) {
   const { workspace } = await requireWorkspace();
   const run = await runDetails((await params).id);
   if (!run) notFound();
+  const { retryError } = await searchParams;
   return (
     <>
       <LiveRefresh />
+      {retryError && (
+        <p role="alert" className="notice danger">
+          {retryError === "queue-limit"
+            ? "The workspace review queue is full. Retry after a current review finishes."
+            : retryError === "unavailable"
+              ? "This review cannot be retried in its current state. Check that the repository is enabled and connected, then refresh the page."
+              : "Billing access or a usage limit prevents this retry. Open Billing to check your workspace access and limits."}
+        </p>
+      )}
       <Link className="back" href="/">
         <ArrowLeft size={15} /> All reviews
       </Link>

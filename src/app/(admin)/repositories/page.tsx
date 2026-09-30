@@ -59,8 +59,11 @@ export default async function Repositories({
       {params.billingError && (
         <div role="alert" className="notice danger">
           <strong>Repository settings were not saved.</strong>{" "}
-          {params.billingError} Review your workspace limits in{" "}
-          <a href="/billing">Billing</a> before trying again.
+          {params.billingError === "repository-limit"
+            ? "Your workspace has reached its enabled-repository limit. Pause another repository to enable this one."
+            : "Billing access or a service limit currently prevents enabling reviews."}{" "}
+          Review your workspace limits in <a href="/billing">Billing</a> before
+          trying again.
         </div>
       )}
       {params.error && (
