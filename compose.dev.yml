@@ -1,0 +1,12 @@
+# Host-run Next.js and worker; only these dependencies run in Docker.
+# Use with compose.yml and explicitly start just postgres and scanner.
+services:
+  postgres:
+    ports: ["127.0.0.1:${DEV_DATABASE_PORT:-55439}:5432"]
+  scanner:
+    ports: ["127.0.0.1:${DEV_SCANNER_PORT:-18080}:8080"]
+# Docker internal networks do not publish ports for host-run development clients.
+# This override allows egress; never use it for server deployments.
+networks:
+  backend: { internal: false }
+  scans: { internal: false }

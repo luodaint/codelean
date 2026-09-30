@@ -1,0 +1,4 @@
+# Local access for a production-mode Compose smoke test. Email verification remains real.
+services:
+  web:
+    ports: ["127.0.0.1:${LOCAL_WEB_PORT:-3100}:3000"]

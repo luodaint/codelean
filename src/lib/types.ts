@@ -1,0 +1,51 @@
+export type Repository = {
+  id: string;
+  installation_id: string;
+  full_name: string;
+  enabled: boolean;
+  connected: boolean;
+  labels_enabled: boolean;
+};
+export type Run = {
+  id: string;
+  repository_id: string;
+  pr_number: number;
+  title: string;
+  head_sha: string;
+  base_sha: string;
+  status: "queued" | "running" | "completed" | "failed" | "cancelled";
+  stage: string;
+  attempts: number;
+  created_at: Date | string;
+  started_at: Date | string | null;
+  completed_at: Date | string | null;
+  result: ReviewResult | null;
+  error: string | null;
+  check_id: string | null;
+  summary_id: string | null;
+  review_id: string | null;
+  publication_started: boolean;
+  tokens: number;
+  model: string | null;
+  full_name?: string;
+};
+export type Finding = {
+  source: "ai" | "semgrep" | "gitleaks";
+  severity: "critical" | "high" | "medium" | "low";
+  path: string;
+  line: number;
+  title: string;
+  description: string;
+  evidence: string;
+  recommendation: string;
+};
+export type SourceFile = { path: string; content: string; patch: string };
+export type ReviewResult = {
+  summary: string;
+  findings: Finding[];
+  files: number;
+  skipped: string[];
+  coverage: "complete" | "partial";
+  scanners: string[];
+  warnings: string[];
+};

@@ -1,0 +1,23 @@
+rules:
+  - id: javascript-dynamic-eval
+    languages: [javascript, typescript]
+    message: Dynamic code evaluation requires a trusted input boundary
+    severity: WARNING
+    pattern: eval($INPUT)
+  - id: python-dynamic-eval
+    languages: [python]
+    message: Dynamic code evaluation requires a trusted input boundary
+    severity: WARNING
+    pattern-either:
+      - pattern: eval($INPUT, ...)
+      - pattern: exec($INPUT, ...)
+  - id: python-shell-execution
+    languages: [python]
+    message: Shell execution can interpret untrusted input as commands
+    severity: WARNING
+    pattern: subprocess.$FUNC(..., shell=True, ...)
+  - id: javascript-disabled-tls
+    languages: [javascript, typescript]
+    message: TLS certificate verification is disabled
+    severity: WARNING
+    pattern: "{..., rejectUnauthorized: false, ...}"

@@ -1,0 +1,3 @@
+title = "Luoda fixed secret detection configuration"
+[extend]
+useDefault = true
