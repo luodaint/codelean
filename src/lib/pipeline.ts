@@ -3,6 +3,7 @@ import { db } from "./db";
 import { appUrl, limits, required } from "./config";
 import { getRepository, GitHub, installationClient, repoPath } from "./github";
 import { addedLines, findingSchema, modelReview } from "./review";
+import { securityAudit } from "./security-audit";
 import { redact, safePath } from "./security";
 import type {
   Finding,
@@ -263,6 +264,9 @@ export async function reportFailure(
 function summaryBody(run: Run, result: ReviewResult) {
   return (
     `<!-- codelean:summary -->\n## Codelean review\n\n${md(result.summary)}\n\n` +
+    (result.securityAudit
+      ? `### PR security audit\n\n${md(result.securityAudit.summary)}\n\nStatus: **${result.securityAudit.status}**. Skills: ${result.securityAudit.skills.map((s) => md(s.name)).join(", ") || "none"}. ${result.securityAudit.retained} retained findings. Changed-file source review only; no runtime verification or repository-wide audit.\n\n`
+      : "") +
     `Reviewed commit \`${run.head_sha.slice(0, 12)}\` against \`${run.base_sha.slice(0, 12)}\`. ` +
     `${result.files} changed files analyzed. Coverage: **${result.coverage}**. This review is advisory.\n\n` +
     result.findings
@@ -337,7 +341,7 @@ export async function publish(
     summary.id,
   ]);
   const findings = result.findings
-    .filter((f) => f.source === "ai")
+    .filter((f) => f.source === "ai" || f.source === "security-audit")
     .slice(0, limits.comments);
   if (findings.length) {
     await current(run, gh, repo);
@@ -441,10 +445,29 @@ export async function processRun(run: Run) {
       scanned.files,
       scanned.findings as Finding[],
     );
-    const warnings = [...scanned.warnings, ...model.warnings];
+    await current(run, reader, repo);
+    await stage(run, "Running PR security audit");
+    const security = await securityAudit(
+      scanned.files,
+      scanned.findings as Finding[],
+      async () => {
+        await current(run, reader, repo);
+        await stage(run, "Verifying security findings");
+      },
+    );
+    const warnings = [
+      ...scanned.warnings,
+      ...model.warnings,
+      ...security.warnings,
+    ];
     result = {
       summary: model.summary,
-      findings: [...scanned.findings, ...model.findings] as Finding[],
+      findings: [
+        ...scanned.findings,
+        ...model.findings,
+        ...security.findings,
+      ] as Finding[],
+      securityAudit: security.audit,
       files: source.files.length,
       skipped: source.skipped,
       coverage:
@@ -454,7 +477,12 @@ export async function processRun(run: Run) {
     };
     await db().query(
       "UPDATE runs SET result=$2, tokens=$3, model=$4 WHERE id=$1",
-      [run.id, JSON.stringify(result), model.tokens, model.model],
+      [
+        run.id,
+        JSON.stringify(result),
+        model.tokens + security.audit.tokens,
+        model.model,
+      ],
     );
   }
   await stage(run, "Publishing review");

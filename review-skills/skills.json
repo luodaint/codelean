@@ -1,0 +1,8 @@
+[
+  {
+    "id": "cloudflare-security-audit",
+    "name": "Cloudflare security audit (PR-focused)",
+    "enabled": true,
+    "files": ["SKILL.md", "upstream/ATTACK-CLASSES.md"]
+  }
+]

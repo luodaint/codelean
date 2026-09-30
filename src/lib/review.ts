@@ -85,6 +85,7 @@ Return one JSON object, no Markdown: {"summary":"...","findings":[{"severity":"c
 export async function modelReview(
   files: SourceFile[],
   scannerFindings: Finding[],
+  options: { instructions?: string; candidates?: Finding[] } = {},
 ) {
   const model = required("NAN_MODEL");
   const url = new URL(
@@ -105,8 +106,21 @@ export async function modelReview(
         temperature: 0.1,
         max_tokens: 6000,
         messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: JSON.stringify({ files, scannerFindings }) },
+          { role: "system", content: options.instructions || systemPrompt },
+          {
+            role: "user",
+            content: JSON.stringify({
+              files,
+              scannerFindings,
+              ...(options.candidates
+                ? {
+                    candidates: options.candidates.map(
+                      ({ source: _source, ...candidate }) => candidate,
+                    ),
+                  }
+                : {}),
+            }),
+          },
         ],
       }),
       signal: AbortSignal.timeout(180_000),

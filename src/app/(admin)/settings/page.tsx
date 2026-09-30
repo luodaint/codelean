@@ -118,6 +118,12 @@ export default async function Settings({
         <p>
           Reviews are advisory. Automatic approvals and merges are disabled.
         </p>
+        <p>
+          New reviews also run a separate PR-focused security audit using the
+          enabled skills in <code>review-skills/skills.json</code>. Edit the
+          Markdown files in <code>review-skills/</code> to tune it. Each run
+          records the skill versions and security results it actually used.
+        </p>
         <dl className="policy-list">
           <dt>Model</dt>
           <dd>{process.env.NAN_MODEL || "Not configured"}</dd>

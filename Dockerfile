@@ -25,6 +25,7 @@ RUN groupadd -g 10001 app && useradd -u 10001 -g app app
 COPY --chown=app:app src ./src
 COPY --chown=app:app scripts ./scripts
 COPY --chown=app:app migrations ./migrations
+COPY --chown=app:app review-skills ./review-skills
 COPY tsconfig.json ./
 USER app
 CMD ["node", "--import", "tsx", "src/worker.ts"]

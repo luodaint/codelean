@@ -12,6 +12,7 @@ A self-hosted GitHub PR reviewer with a Next.js admin, PostgreSQL queue, Semgrep
 - Self-service company workspaces, workspace switching, owner/admin/member roles, and teammate invitations. Company repositories, reviews, statistics, and settings stay scoped to membership.
 - GitHub App repository discovery, enable/pause controls, signed PR webhooks and durable jobs.
 - Bounded source snapshots at an exact commit, static checks, secret redaction, and validated AI findings.
+- A separate PR security audit using editable [review skills](review-skills/README.md), with Cloudflare guidance and a fresh source-verification call for candidates. Edit `review-skills/skills.json` and the skill Markdown to tune it.
 - GitHub check progress, an updated summary comment, up to five inline AI comments, and optional status labels.
 - Run history, findings, retry controls, worker status and usage statistics.
 - Source-built Docker images, Compose/Dokploy configuration, migrations, health checks, and installation/backup instructions.

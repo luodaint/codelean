@@ -30,7 +30,7 @@ export type Run = {
   full_name?: string;
 };
 export type Finding = {
-  source: "ai" | "semgrep" | "gitleaks";
+  source: "ai" | "security-audit" | "semgrep" | "gitleaks";
   severity: "critical" | "high" | "medium" | "low";
   path: string;
   line: number;
@@ -40,6 +40,17 @@ export type Finding = {
   recommendation: string;
 };
 export type SourceFile = { path: string; content: string; patch: string };
+export type SecurityAuditResult = {
+  status: "completed" | "disabled";
+  scope: "changed-files";
+  summary: string;
+  skills: { id: string; name: string; sha256: string }[];
+  tokens: number;
+  model: string | null;
+  candidates: number;
+  retained: number;
+  verification: "source-model-pass" | "no-candidates" | "not-run";
+};
 export type ReviewResult = {
   summary: string;
   findings: Finding[];
@@ -48,4 +59,5 @@ export type ReviewResult = {
   coverage: "complete" | "partial";
   scanners: string[];
   warnings: string[];
+  securityAudit?: SecurityAuditResult;
 };
