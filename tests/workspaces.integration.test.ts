@@ -218,7 +218,9 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
         runs[1],
       ]);
       await updateRepository(form({ id: String(repoB) }));
-      await retryRun(form({ id: runs[1] }));
+      await expect(retryRun(form({ id: runs[1] }))).rejects.toThrow(
+        `Redirect: /runs/${runs[1]}?retryError=unavailable`,
+      );
       expect(
         (
           await db().query("SELECT enabled FROM repositories WHERE id=$1", [

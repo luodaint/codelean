@@ -1,5 +1,6 @@
 import { requireWorkspace } from "@/lib/auth";
 import { Shell } from "@/components/shell";
+import { isOperator } from "@/lib/billing-policy";
 export const dynamic = "force-dynamic";
 export default async function AdminLayout({
   children,
@@ -10,6 +11,7 @@ export default async function AdminLayout({
   return (
     <Shell
       workspace={workspace}
+      operator={isOperator(session.user)}
       email={session.user.email}
       name={session.user.name}
       githubUsername={session.user.githubUsername}

@@ -12,6 +12,15 @@ x-github: &github
   GITHUB_APP_SLUG: ${GITHUB_APP_SLUG:-}
   GITHUB_PRIVATE_KEY_BASE64: ${GITHUB_PRIVATE_KEY_BASE64:-}
   GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET:?Generate webhook secret}
+x-billing: &billing
+  BILLING_ENABLED: ${BILLING_ENABLED:-true}
+  CREEM_TEST_MODE: ${CREEM_TEST_MODE:-true}
+  CREEM_API_KEY: ${CREEM_API_KEY:-}
+  CREEM_PLAN_PRODUCT_ID: ${CREEM_PLAN_PRODUCT_ID:-}
+  CREEM_TOKEN_PRODUCT_ID: ${CREEM_TOKEN_PRODUCT_ID:-}
+  CREEM_METER_ID: ${CREEM_METER_ID:-}
+  BILLING_PROVIDER_TOKEN_BUDGET: ${BILLING_PROVIDER_TOKEN_BUDGET:-3000000000}
+  BILLING_PROVIDER_PERIOD_START: ${BILLING_PROVIDER_PERIOD_START:-}
 services:
   postgres:
     image: postgres:17-alpine
@@ -47,7 +56,8 @@ services:
     image: codelean-web:0.1.0
     build: { context: ., target: web }
     environment:
-      <<: [*database, *auth, *github]
+      <<: [*database, *auth, *github, *billing]
+      CREEM_WEBHOOK_SECRET: ${CREEM_WEBHOOK_SECRET:-}
       GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
       GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
       SMTP_HOST: ${SMTP_HOST:-}
@@ -83,7 +93,7 @@ services:
     image: codelean-worker:0.1.0
     build: { context: ., target: worker }
     environment:
-      <<: [*database, *github]
+      <<: [*database, *github, *billing]
       APP_URL: ${APP_URL}
       NAN_BASE_URL: ${NAN_BASE_URL:-https://api.nan.builders/v1}
       NAN_API_KEY: ${NAN_API_KEY:-}

@@ -4,9 +4,11 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { auth, requireMutation, requireWorkspace } from "@/lib/auth";
-import { db, transaction } from "@/lib/db";
+import { transaction } from "@/lib/db";
 import { syncRepositories, OrganizationAccessError } from "@/lib/github";
 import { userGitHub } from "@/lib/github-user";
+import { assertReviewAccess, assertRepositoryLimit } from "@/lib/billing";
+import { billingEnabled, BillingBlocked } from "@/lib/billing-policy";
 
 export async function logout() {
   await requireMutation();
@@ -47,33 +49,74 @@ export async function updateRepository(form: FormData) {
   await requireMutation();
   const { workspace } = await requireWorkspace(true);
   const id = z.string().regex(/^\d+$/).parse(form.get("id"));
-  await transaction(async (c) => {
-    await c.query(
-      "UPDATE repositories SET enabled=$2, labels_enabled=$3 WHERE id=$1 AND organization_id=$4 AND connected=true",
-      [
-        id,
-        form.get("enabled") === "on",
-        form.get("labels") === "on",
-        workspace.id,
-      ],
-    );
-    if (form.get("enabled") !== "on")
+  try {
+    await transaction(async (c) => {
+      if (form.get("enabled") === "on")
+        await assertRepositoryLimit(workspace.id, id, c);
       await c.query(
-        "UPDATE runs SET status='cancelled', completed_at=now(), stage='Repository paused' WHERE repository_id=$1 AND repository_id IN (SELECT id FROM repositories WHERE organization_id=$2) AND status IN ('queued','running')",
-        [id, workspace.id],
+        "UPDATE repositories SET enabled=$2, labels_enabled=$3 WHERE id=$1 AND organization_id=$4 AND connected=true",
+        [
+          id,
+          form.get("enabled") === "on",
+          form.get("labels") === "on",
+          workspace.id,
+        ],
       );
-  });
+      if (form.get("enabled") !== "on")
+        await c.query(
+          "UPDATE runs SET status='cancelled', completed_at=now(), stage='Repository paused' WHERE repository_id=$1 AND repository_id IN (SELECT id FROM repositories WHERE organization_id=$2) AND status IN ('queued','running')",
+          [id, workspace.id],
+        );
+    });
+  } catch (error) {
+    if (!(error instanceof BillingBlocked)) throw error;
+    redirect(`/repositories?billingError=${error.code}`);
+  }
   revalidatePath("/", "layout");
 }
 export async function retryRun(form: FormData) {
   await requireMutation();
   const { workspace } = await requireWorkspace(true);
   const id = z.uuid().parse(form.get("id"));
-  await db().query(
-    `UPDATE runs SET status='queued', stage='Retry requested', error=NULL, attempts=0, completed_at=NULL, available_at=now()
-    WHERE id=$1 AND status IN ('failed','cancelled') AND repository_id IN (SELECT id FROM repositories WHERE organization_id=$2 AND enabled AND connected)`,
-    [id, workspace.id],
-  );
+  let retryError: string | undefined;
+  try {
+    const queued = await transaction(async (c) => {
+      await assertReviewAccess(workspace.id, c);
+      // assertReviewAccess locks the workspace billing row before this count.
+      // Only a retry that can actually transition to queued consumes a slot.
+      const eligible = (
+        await c.query(
+          "SELECT r.id FROM runs r JOIN repositories p ON p.id=r.repository_id WHERE r.id=$1 AND r.status IN ('failed','cancelled') AND p.organization_id=$2 AND p.enabled AND p.connected FOR UPDATE OF r",
+          [id, workspace.id],
+        )
+      ).rowCount;
+      if (!eligible) return false;
+      if (billingEnabled()) {
+        const queued = (
+          await c.query(
+            "SELECT count(*)::int AS n FROM runs r JOIN repositories p ON p.id=r.repository_id WHERE p.organization_id=$1 AND r.status='queued'",
+            [workspace.id],
+          )
+        ).rows[0].n;
+        if (queued >= 10)
+          throw new BillingBlocked(
+            "Workspace queue is full. Retry after current reviews finish.",
+            "queue-limit",
+          );
+      }
+      await c.query(
+        `UPDATE runs SET status='queued', stage='Retry requested', error=NULL, attempts=0, completed_at=NULL, available_at=now()
+      WHERE id=$1 AND status IN ('failed','cancelled') AND repository_id IN (SELECT id FROM repositories WHERE organization_id=$2 AND enabled AND connected)`,
+        [id, workspace.id],
+      );
+      return true;
+    });
+    if (!queued) retryError = "unavailable";
+  } catch (error) {
+    if (!(error instanceof BillingBlocked)) throw error;
+    retryError = error.code;
+  }
+  if (retryError) redirect(`/runs/${id}?retryError=${retryError}`);
   revalidatePath(`/runs/${id}`);
   revalidatePath("/");
 }

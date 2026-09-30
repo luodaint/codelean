@@ -7,9 +7,11 @@ export class ModelReviewError extends Error {
   }
 }
 
+type UsageCallback = (usage: import("./billing").UsageRecord) => Promise<void>;
+
 const maxResponseBytes = 32_000_000;
 
-async function readJsonResponse(response: Response) {
+async function readJsonResponse(response: Response, onUsage?: UsageCallback) {
   const reader = response.body?.getReader();
   if (!reader)
     throw new ModelReviewError(
@@ -42,6 +44,7 @@ async function readJsonResponse(response: Response) {
       throw new ModelReviewError(
         "Model provider returned an unreadable response. No clean review was produced.",
       );
+    if (data.usage) await onUsage?.(data.usage);
     if (data.error)
       throw new ModelReviewError(
         "Model provider reported a response error. No clean review was produced.",
@@ -68,9 +71,12 @@ async function readJsonResponse(response: Response) {
 
 // Consume the provider's SSE stream without storing or exposing reasoning text.
 // Streaming keeps long reasoning requests active through the provider's proxy.
-export async function readModelResponse(response: Response) {
+export async function readModelResponse(
+  response: Response,
+  onUsage?: UsageCallback,
+) {
   if (!response.headers.get("content-type")?.includes("text/event-stream"))
-    return readJsonResponse(response);
+    return readJsonResponse(response, onUsage);
   const reader = response.body?.getReader();
   if (!reader)
     throw new ModelReviewError(
@@ -81,7 +87,7 @@ export async function readModelResponse(response: Response) {
     event = "",
     content = "",
     finishReason: string | null = null;
-  let usage: { total_tokens?: number } | undefined;
+  let usage: import("./billing").UsageRecord | undefined;
   let nanTruncation = false;
   let bytes = 0,
     done = false;
@@ -114,7 +120,7 @@ export async function readModelResponse(response: Response) {
       );
     if (typeof choice?.finish_reason === "string")
       finishReason = choice.finish_reason;
-    if (chunk.usage) usage = { total_tokens: chunk.usage.total_tokens };
+    if (chunk.usage) usage = chunk.usage;
     if (chunk.nan_truncation || chunk.usage?.nan_truncation)
       nanTruncation = true;
   }
@@ -151,11 +157,15 @@ export async function readModelResponse(response: Response) {
       );
     return {
       choices: [{ message: { content }, finish_reason: finishReason }],
-      usage,
+      usage: usage ? { total_tokens: usage.total_tokens } : undefined,
       ...(nanTruncation ? { nan_truncation: true } : {}),
     };
   } finally {
-    await reader.cancel().catch(() => {});
-    reader.releaseLock();
+    try {
+      if (usage) await onUsage?.(usage);
+    } finally {
+      await reader.cancel().catch(() => {});
+      reader.releaseLock();
+    }
   }
 }
