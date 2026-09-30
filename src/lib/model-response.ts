@@ -9,10 +9,15 @@ export class ModelReviewError extends Error {
 
 // Consume the provider's SSE stream without storing or exposing reasoning text.
 // Streaming keeps long reasoning requests active through the provider's proxy.
-export async function readModelResponse(response: Response) {
+export async function readModelResponse(
+  response: Response,
+  onUsage?: (usage: import("./billing").UsageRecord) => Promise<void>,
+) {
   if (!response.headers.get("content-type")?.includes("text/event-stream")) {
     try {
-      return await response.json();
+      const data = await response.json();
+      if (data.usage) await onUsage?.(data.usage);
+      return data;
     } catch {
       throw new ModelReviewError(
         "Model provider returned an unreadable response. No clean review was produced.",
@@ -29,7 +34,7 @@ export async function readModelResponse(response: Response) {
     event = "",
     content = "",
     finishReason: string | null = null;
-  let usage: { total_tokens?: number } | undefined;
+  let usage: import("./billing").UsageRecord | undefined;
   let nanTruncation = false;
   let bytes = 0,
     done = false;
@@ -62,7 +67,7 @@ export async function readModelResponse(response: Response) {
       );
     if (typeof choice?.finish_reason === "string")
       finishReason = choice.finish_reason;
-    if (chunk.usage) usage = { total_tokens: chunk.usage.total_tokens };
+    if (chunk.usage) usage = chunk.usage;
     if (chunk.nan_truncation || chunk.usage?.nan_truncation)
       nanTruncation = true;
   }
@@ -103,7 +108,11 @@ export async function readModelResponse(response: Response) {
       ...(nanTruncation ? { nan_truncation: true } : {}),
     };
   } finally {
-    await reader.cancel().catch(() => {});
-    reader.releaseLock();
+    try {
+      if (usage) await onUsage?.(usage);
+    } finally {
+      await reader.cancel().catch(() => {});
+      reader.releaseLock();
+    }
   }
 }

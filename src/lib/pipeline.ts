@@ -3,6 +3,7 @@ import { db } from "./db";
 import { appUrl, limits, required } from "./config";
 import { getRepository, GitHub, installationClient, repoPath } from "./github";
 import { addedLines, findingSchema, modelReview } from "./review";
+import { withReviewBilling, saveReviewResult } from "./billing";
 import { securityAudit } from "./security-audit";
 import { ReviewOrchestrator } from "./review-orchestrator";
 import { redact, safePath } from "./security";
@@ -421,6 +422,9 @@ export async function publish(
   }
 }
 export async function processRun(run: Run) {
+  return withReviewBilling(run, () => processRunInternal(run));
+}
+async function processRunInternal(run: Run) {
   const repo = await getRepository(run.repository_id);
   if (!repo?.enabled || !repo.connected)
     throw new Superseded("Repository disabled");
@@ -508,20 +512,17 @@ export async function processRun(run: Run) {
       scanners: scanned.scanners,
       warnings,
     };
-    await db().query(
-      "UPDATE runs SET result=$2, tokens=$3, model=$4 WHERE id=$1",
+    await saveReviewResult(
+      run,
+      result,
+      model.tokens + security.audit.tokens,
       [
-        run.id,
-        JSON.stringify(result),
-        model.tokens + security.audit.tokens,
-        [
-          ...new Set(
-            [model.model, security.audit.model]
-              .filter(Boolean)
-              .flatMap((name) => name!.split(", ")),
-          ),
-        ].join(", "),
-      ],
+        ...new Set(
+          [model.model, security.audit.model]
+            .filter(Boolean)
+            .flatMap((name) => name!.split(", ")),
+        ),
+      ].join(", "),
     );
   }
   await stage(run, "Publishing review");

@@ -5,6 +5,7 @@ import { auth, requireUser } from "@/lib/auth";
 import { workspacesFor } from "@/lib/workspaces";
 import { Shell } from "@/components/shell";
 import { Submit } from "@/components/submit";
+import { isOperator } from "@/lib/billing-policy";
 import { acceptInvitation, createWorkspace, switchWorkspace } from "./actions";
 export const dynamic = "force-dynamic";
 export default async function Workspaces() {
@@ -18,6 +19,7 @@ export default async function Workspaces() {
   });
   return (
     <Shell
+      operator={isOperator(session.user)}
       email={session.user.email}
       name={session.user.name}
       githubUsername={session.user.githubUsername}

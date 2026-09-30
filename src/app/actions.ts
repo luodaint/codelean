@@ -4,9 +4,11 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { auth, requireMutation, requireWorkspace } from "@/lib/auth";
-import { db, transaction } from "@/lib/db";
+import { transaction } from "@/lib/db";
 import { syncRepositories, OrganizationAccessError } from "@/lib/github";
 import { userGitHub } from "@/lib/github-user";
+import { assertReviewAccess, assertRepositoryLimit } from "@/lib/billing";
+import { billingEnabled, BillingBlocked } from "@/lib/billing-policy";
 
 export async function logout() {
   await requireMutation();
@@ -48,6 +50,8 @@ export async function updateRepository(form: FormData) {
   const { workspace } = await requireWorkspace(true);
   const id = z.string().regex(/^\d+$/).parse(form.get("id"));
   await transaction(async (c) => {
+    if (form.get("enabled") === "on")
+      await assertRepositoryLimit(workspace.id, id, c);
     await c.query(
       "UPDATE repositories SET enabled=$2, labels_enabled=$3 WHERE id=$1 AND organization_id=$4 AND connected=true",
       [
@@ -69,11 +73,26 @@ export async function retryRun(form: FormData) {
   await requireMutation();
   const { workspace } = await requireWorkspace(true);
   const id = z.uuid().parse(form.get("id"));
-  await db().query(
-    `UPDATE runs SET status='queued', stage='Retry requested', error=NULL, attempts=0, completed_at=NULL, available_at=now()
+  await transaction(async (c) => {
+    await assertReviewAccess(workspace.id, c);
+    if (billingEnabled()) {
+      const queued = (
+        await c.query(
+          "SELECT count(*)::int AS n FROM runs r JOIN repositories p ON p.id=r.repository_id WHERE p.organization_id=$1 AND r.status='queued'",
+          [workspace.id],
+        )
+      ).rows[0].n;
+      if (queued >= 10)
+        throw new BillingBlocked(
+          "Workspace queue is full. Retry after current reviews finish.",
+        );
+    }
+    await c.query(
+      `UPDATE runs SET status='queued', stage='Retry requested', error=NULL, attempts=0, completed_at=NULL, available_at=now()
     WHERE id=$1 AND status IN ('failed','cancelled') AND repository_id IN (SELECT id FROM repositories WHERE organization_id=$2 AND enabled AND connected)`,
-    [id, workspace.id],
-  );
+      [id, workspace.id],
+    );
+  });
   revalidatePath(`/runs/${id}`);
   revalidatePath("/");
 }

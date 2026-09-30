@@ -25,6 +25,7 @@ export function Shell({
   name,
   githubUsername,
   image,
+  operator = false,
 }: {
   children: React.ReactNode;
   workspace?: { name: string; role: string };
@@ -32,6 +33,7 @@ export function Shell({
   name?: string;
   githubUsername?: string | null;
   image?: string | null;
+  operator?: boolean;
 }) {
   return (
     <div className="app-shell">
@@ -51,7 +53,7 @@ export function Shell({
           </div>
           <span className="workspace-dot" />
         </Link>
-        <Navigation />
+        <Navigation operator={operator} />
         <div className="sidebar-bottom">
           <div className="advisory">
             <ShieldCheck size={20} />

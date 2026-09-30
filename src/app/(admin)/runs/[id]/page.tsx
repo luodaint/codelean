@@ -75,7 +75,7 @@ export default async function RunPage({
               <div className="summary-tags">
                 <span>{run.result.files} files reviewed</span>
                 <span>{run.result.coverage} coverage</span>
-                <span>{run.tokens.toLocaleString()} tokens</span>
+                <span>{BigInt(run.tokens).toLocaleString()} tokens</span>
                 <span>{run.model}</span>
                 {run.result.reviewBatches && (
                   <span>{run.result.reviewBatches} review batches</span>

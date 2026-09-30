@@ -94,7 +94,7 @@ One person can belong to several companies. The initial limits are 10 workspace 
 
 `ADMIN_EMAILS` is only an optional signup gate when `SIGNUP_MODE=restricted`. It never grants cross-company access. When upgrading an existing private instance, keep the old allowlist during the first migration: existing matching users become owners of **Original workspace**, which retains all previous repositories and reviews. A later signup never inherits these records. If no matching user exists, follow the explicit recovery procedure in [the installation guide](docs/installation.md#workspace-upgrades-and-recovery).
 
-Workspaces provide application-level data isolation on shared infrastructure. Billing, subscriptions, per-company budgets, fair scheduling, and automatic retention are not implemented yet.
+Workspaces provide application-level data isolation on shared infrastructure. Creem subscriptions, metered usage, optional spending caps and workspace scheduling are implemented; see [billing setup and operations](docs/billing.md). Automatic retention is not implemented yet.
 
 ### Check, stop and restart locally
 

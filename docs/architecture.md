@@ -1,6 +1,6 @@
 # Architecture and boundaries
 
-Codelean supports multiple company workspaces using Better Auth organizations, memberships, invitations and active workspace sessions. PostgreSQL holds those records alongside repositories, delivery receipts, runs, results and worker heartbeats. The operator shares infrastructure and provider credentials across companies; billing and resource fairness are not yet implemented.
+Codelean supports multiple company workspaces using Better Auth organizations, memberships, invitations and active workspace sessions. PostgreSQL holds those records alongside repositories, delivery receipts, runs, results and worker heartbeats. The operator shares infrastructure and provider credentials across companies; Creem billing and usage limits are described in [Billing](billing.md). Workspaces share a single worker, which prefers the least recently served workspace.
 
 ## Components
 
@@ -52,8 +52,8 @@ Migration 002 keeps pre-existing repositories in an Original workspace and assig
 
 ## Known first-release limits
 
-- Multiple workspaces share one active worker and a basic rule set. No billing, per-company spending caps or fair scheduling. No custom trusted policy UI, multi-model validation, approval policy, CI aggregation or repository test execution.
+- Multiple workspaces share one active worker and a basic rule set. No custom trusted policy UI, multi-model validation, approval policy, CI aggregation or repository test execution.
 - Source snapshots are temporary; result evidence can contain code fragments and should be treated as private repository data. No automated retention deletion yet.
-- Token usage is recorded when returned by the provider. Cost estimates and provider model discovery are not implemented; `NAN_MODEL` must be supplied by the operator.
+- Token usage is recorded when returned by the provider. Billable usage and provider capacity have separate ledgers. Provider model discovery is not implemented; `NAN_MODEL` must be supplied by the operator.
 - Worker and trusted publisher share a process/credentials in this version. Scanners are separated; model inference is a bounded HTTP call.
 - Images build from source; the version tags are local image names. A signed, digest-pinned release registry and multi-architecture CI publication remain release work.

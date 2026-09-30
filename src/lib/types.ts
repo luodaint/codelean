@@ -25,7 +25,7 @@ export type Run = {
   summary_id: string | null;
   review_id: string | null;
   publication_started: boolean;
-  tokens: number;
+  tokens: number | string;
   model: string | null;
   full_name?: string;
 };
