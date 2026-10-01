@@ -35,7 +35,7 @@ export function EmailLogin({ local }: { local: boolean }) {
         setError(
           result.error.message || "That code did not work. Request a new one.",
         );
-      else window.location.assign("/");
+      else window.location.assign("/dashboard");
     } catch {
       setError("Could not complete sign-in. Try again.");
     } finally {

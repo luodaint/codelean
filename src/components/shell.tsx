@@ -39,7 +39,7 @@ export function Shell({
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <Link href="/" aria-label="Codelean home">
+        <Link href="/dashboard" aria-label="Codelean dashboard">
           <Brand />
         </Link>
         <Link href="/workspaces" className="workspace">
@@ -76,6 +76,10 @@ export function Shell({
             </button>
           </form>
           <span className="version">Codelean · v0.1.0</span>
+          <div className="sidebar-legal">
+            <Link href="/terms">Terms</Link>
+            <Link href="/privacy">Privacy</Link>
+          </div>
         </div>
       </aside>
       <div className="main-column">

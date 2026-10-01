@@ -18,7 +18,7 @@ export function Navigation({
   return (
     <nav aria-label="Main navigation">
       {[
-        { href: "/", name: "Review runs", Icon: GitPullRequest },
+        { href: "/dashboard", name: "Review runs", Icon: GitPullRequest },
         { href: "/repositories", name: "Repositories", Icon: FolderGit2 },
         { href: "/statistics", name: "Statistics", Icon: ChartNoAxesCombined },
         { href: "/settings", name: "Settings", Icon: Settings2 },
@@ -34,8 +34,8 @@ export function Navigation({
           href={href}
           aria-current={
             (
-              href === "/"
-                ? path === "/" || path.startsWith("/runs/")
+              href === "/dashboard"
+                ? path === "/dashboard" || path.startsWith("/runs/")
                 : path === href
             )
               ? "page"
