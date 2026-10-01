@@ -63,7 +63,7 @@ export async function billingAccount(
   return (
     await c.query<BillingAccount>(billingProjection, [
       [organizationId],
-      ownerGitHubId,
+      ownerGitHubId(),
     ])
   ).rows[0];
 }
@@ -76,7 +76,7 @@ export async function billingAccounts(organizationIds: string[]) {
   const rows = (
     await db().query<BillingAccount>(billingProjection, [
       organizationIds,
-      ownerGitHubId,
+      ownerGitHubId(),
     ])
   ).rows;
   const byId = new Map(rows.map((row) => [row.organization_id, row]));

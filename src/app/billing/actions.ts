@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requireMutation, requireWorkspace } from "@/lib/auth";
 import { billingAccount, complimentary } from "@/lib/billing";
-import { parseLimit } from "@/lib/billing-policy";
+import { billingEnabled, parseLimit } from "@/lib/billing-policy";
 import {
   createBillingCheckout,
   refreshBillingSubscription,
@@ -16,6 +16,8 @@ async function owner() {
   const context = await requireWorkspace();
   if (context.workspace.role !== "owner")
     throw new Error("Only workspace owners can manage billing.");
+  if (!billingEnabled())
+    throw new Error("Payments are disabled on this instance.");
   return context;
 }
 export async function checkout(form: FormData) {

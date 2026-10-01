@@ -22,6 +22,16 @@ export default async function Billing({
   searchParams: Promise<{ error?: string; saved?: string; checkout?: string }>;
 }) {
   const { workspace } = await requireWorkspace();
+  if (!billingEnabled())
+    return (
+      <>
+        <h1>Self-hosted edition</h1>
+        <p>
+          Payments are disabled on this instance. No Codelean subscription is
+          required. Your hosting and model provider costs still apply.
+        </p>
+      </>
+    );
   const b = await billingAccount(workspace.id);
   const params = await searchParams;
   const free = complimentary(b);
@@ -81,7 +91,7 @@ export default async function Billing({
             : `${includedMillions} million review tokens per month. All review features included. Additional usage costs $${overagePrice} per million tokens, plus applicable taxes.`}
         </p>
         {b.owner_exempt && (
-          <p className="notice success">Permanent owner exemption · mllopart</p>
+          <p className="notice success">Service operator exemption</p>
         )}
         {b.complimentary_until && !b.owner_exempt && (
           <p>

@@ -4,7 +4,7 @@ Audience: Codex, Claude, or a human operator working on the target Linux server.
 
 PURPOSE AND CURRENT STATUS
 
-Repository: git@github.com:luodaint/codelean.dev.git (private; authorized access required).
+Repository: https://github.com/luodaint/codelean.git (public source repository).
 Default production domain: codelean.dev; Cloudflare manages DNS.
 Domain and local tunnel guide: docs/domain-setup.md.
 
@@ -187,7 +187,7 @@ workspace migration and back up first. It assigns only existing matching users
 to the original workspace. New signups create separate company workspaces.
 Configure the GitHub App for Any account to support other companies. Verify
 two separate workspace accounts cannot see or mutate each other's reviews.
-Billing, per-company budgets and fair scheduling are not implemented yet.
+Billing is optional: see docs/configuration.md and docs/billing.md. Configure OPERATOR_GITHUB_ID explicitly; there is no built-in administrator.
 Start services and check actual readiness at /api/health and worker heartbeat.
 Register/configure the operator's GitHub App using the implemented setup and
 webhook routes (POST /api/webhooks/github) and documented permissions; install on selected test repositories.

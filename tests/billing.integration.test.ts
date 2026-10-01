@@ -61,6 +61,7 @@ suite("billing PostgreSQL integration", () => {
     process.env.DATABASE_URL = process.env.TEST_DATABASE_URL!;
   });
   beforeEach(async () => {
+    vi.stubEnv("OPERATOR_GITHUB_ID", "1257083");
     vi.stubEnv("BILLING_ENABLED", "true");
     vi.stubEnv("APP_URL", "http://localhost:3100");
     vi.stubEnv("CREEM_PLAN_PRODUCT_ID", "prod_plan");

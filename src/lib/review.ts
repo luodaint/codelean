@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { limits, required } from "./config";
+import { limits, modelConfig, configuredModel } from "./config";
 import { redact, safePath } from "./security";
 import type { Finding, SourceFile } from "./types";
 import { loadReviewSkills } from "./review-skills";
@@ -171,11 +171,11 @@ export async function modelReview(
               scannerFindings: scopedFindings,
               candidates,
               instructions,
-              model: required("NAN_MODEL"),
-              fallback: process.env.NAN_FALLBACK_MODEL?.trim() || null,
-              endpoint:
-                process.env.NAN_BASE_URL || "https://api.nan.builders/v1",
+              model: configuredModel(),
+              fallback: modelConfig().fallbackModel || null,
+              endpoint: modelConfig().baseUrl,
               maxOutputTokens: limits.modelOutputTokens,
+              tokenParameter: process.env.LLM_TOKEN_PARAMETER || "max_tokens",
             },
             () =>
               reviewBatch(batch, scopedFindings, {
@@ -341,11 +341,11 @@ async function reviewBatch(
   try {
     return await runAgent();
   } catch (error) {
-    const fallback = process.env.NAN_FALLBACK_MODEL?.trim();
+    const fallback = modelConfig().fallbackModel;
     if (
       !(error instanceof ModelReasoningLimitError) ||
       !fallback ||
-      fallback === required("NAN_MODEL")
+      fallback === configuredModel()
     )
       throw error;
     options.signal.throwIfAborted();
@@ -375,19 +375,36 @@ async function requestReviewBatch(
     reasoningEffort?: string;
   },
 ) {
-  const model = options.model || required("NAN_MODEL");
-  const url = new URL(
-    process.env.NAN_BASE_URL || "https://api.nan.builders/v1",
-  );
-  if (url.protocol !== "https:")
+  const config = modelConfig();
+  if (!config.apiKey)
+    throw new Error(`Missing configuration: ${config.prefix}_API_KEY`);
+  const model = options.model || configuredModel();
+  const url = new URL(modelConfig().baseUrl);
+  if (
+    url.protocol !== "https:" ||
+    url.username ||
+    url.password ||
+    url.search ||
+    url.hash
+  )
     throw new Error("Model provider must use HTTPS");
+  if (
+    !["max_tokens", "max_completion_tokens"].includes(
+      process.env.LLM_TOKEN_PARAMETER || "max_tokens",
+    )
+  )
+    throw new Error(
+      "LLM_TOKEN_PARAMETER must be max_tokens or max_completion_tokens",
+    );
   const requestBody = JSON.stringify({
     model,
-    temperature: 0.1,
+    ...(config.prefix === "NAN" || url.hostname === "api.nan.builders"
+      ? { temperature: 0.1 }
+      : {}),
     ...(options.reasoningEffort
       ? { reasoning_effort: options.reasoningEffort }
       : {}),
-    max_tokens: limits.modelOutputTokens,
+    [process.env.LLM_TOKEN_PARAMETER || "max_tokens"]: limits.modelOutputTokens,
     stream: true,
     stream_options: { include_usage: true },
     // NaN supports json_object for DeepSeek; json_schema is not supported.
@@ -441,11 +458,12 @@ async function requestReviewBatch(
       {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${required("NAN_API_KEY")}`,
+          Authorization: `Bearer ${config.apiKey}`,
           "Content-Type": "application/json",
         },
         body: requestBody,
         signal: options.signal,
+        redirect: "error",
       },
     );
     if (!response.ok)

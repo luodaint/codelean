@@ -41,6 +41,7 @@ describe("billing policy and Creem contract", () => {
       expect(() => parseLimit(input)).toThrow();
   });
   it("grants operator status only to the immutable owner identity", () => {
+    vi.stubEnv("OPERATOR_GITHUB_ID", "1257083");
     expect(isOperator({ githubId: "1257083" })).toBe(true);
     expect(isOperator({ githubId: "1" })).toBe(false);
     expect(isOperator({})).toBe(false);

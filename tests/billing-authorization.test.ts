@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createHmac } from "node:crypto";
 import { z } from "zod";
 const mocks = vi.hoisted(() => ({
@@ -27,8 +27,10 @@ import { updateAccess } from "../src/app/super-admin/actions";
 import { setLimit } from "../src/app/billing/actions";
 import { requireOperator } from "../src/lib/operator";
 import { POST } from "../src/app/api/webhooks/creem/route";
+afterEach(() => vi.unstubAllEnvs());
 describe("billing authorization boundaries", () => {
   beforeEach(() => {
+    vi.stubEnv("OPERATOR_GITHUB_ID", "1257083");
     vi.clearAllMocks();
     mocks.user.mockResolvedValue({
       user: { id: "ordinary", githubId: "1", githubUsername: "mllopart" },
@@ -47,6 +49,16 @@ describe("billing authorization boundaries", () => {
   it("does not let workspace administrators change billing", async () => {
     await expect(setLimit(new FormData())).rejects.toThrow(
       "Only workspace owners",
+    );
+    expect(mocks.account).not.toHaveBeenCalled();
+  });
+  it("rejects direct payment mutations when billing is disabled", async () => {
+    vi.stubEnv("BILLING_ENABLED", "false");
+    mocks.workspace.mockResolvedValue({
+      workspace: { id: "owned", role: "owner" },
+    });
+    await expect(setLimit(new FormData())).rejects.toThrow(
+      "Payments are disabled",
     );
     expect(mocks.account).not.toHaveBeenCalled();
   });

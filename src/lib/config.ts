@@ -41,3 +41,38 @@ export function emailLoginConfigured() {
     process.env.EMAIL_FROM,
   );
 }
+
+// Select one complete configuration family so a legacy key is never sent to a new endpoint.
+export function modelConfig() {
+  const generic = [
+    "LLM_BASE_URL",
+    "LLM_API_KEY",
+    "LLM_MODEL",
+    "LLM_FALLBACK_MODEL",
+  ].some((name) => Boolean(process.env[name]?.trim()));
+  const prefix = generic ? "LLM" : "NAN";
+  return {
+    baseUrl:
+      process.env[`${prefix}_BASE_URL`]?.trim() ||
+      (generic ? "https://api.openai.com/v1" : "https://api.nan.builders/v1"),
+    apiKey: process.env[`${prefix}_API_KEY`]?.trim() || "",
+    model: process.env[`${prefix}_MODEL`]?.trim() || "",
+    fallbackModel: process.env[`${prefix}_FALLBACK_MODEL`]?.trim() || "",
+    prefix,
+  };
+}
+export function configuredModel() {
+  const config = modelConfig();
+  if (!config.model)
+    throw new Error(`Missing configuration: ${config.prefix}_MODEL`);
+  return config.model;
+}
+export function creemConfigured() {
+  return [
+    "CREEM_API_KEY",
+    "CREEM_WEBHOOK_SECRET",
+    "CREEM_PLAN_PRODUCT_ID",
+    "CREEM_TOKEN_PRODUCT_ID",
+    "CREEM_METER_ID",
+  ].every((name) => Boolean(process.env[name]?.trim()));
+}

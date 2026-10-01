@@ -10,7 +10,7 @@ For a fresh Hetzner server, follow [server-bootstrap.txt](server-bootstrap.txt).
 
 ## 2. Prepare configuration
 
-Clone `git@github.com:luodaint/codelean.dev.git` with an authorized GitHub account, or use a reviewed source archive. No public container registry is assumed. See [domain setup](domain-setup.md) for Cloudflare and exact Codelean URLs. Use Node.js 22+:
+Clone `https://github.com/luodaint/codelean.git` or use a reviewed source archive. No public container registry is assumed. See [domain setup](domain-setup.md) for Cloudflare and exact Codelean URLs. Use Node.js 22+:
 
 ```sh
 npm ci
@@ -43,6 +43,8 @@ Setup creates `.env` with random secrets and refuses to overwrite an existing fi
 | `SCANNER_TOKEN`                            | Generated shared scanner credential; Compose supplies the private scanner URL                |
 
 For a PEM key, encode it locally and copy through a secure channel; avoid logging the output in automation. The application never requests your personal GitHub access token. The configured NaN model must support chat completions and returning JSON. [NaN documents its API](https://nan.builders/docs); the app validates JSON itself and does not depend on a provider-specific structured-output flag.
+
+See the complete [environment reference](configuration.md) and [provider guide](llm-providers.md) for generic `LLM_*` settings, optional payments, and operator configuration. New self-hosted installations need no Creem keys. Set `OPERATOR_GITHUB_ID` explicitly before upgrading an existing operator deployment; there is no hard-coded administrator.
 
 ## 3. Deploy with Dokploy
 
@@ -138,4 +140,4 @@ ON CONFLICT ("organizationId", "userId") DO NOTHING
 RETURNING "userId", "organizationId", role;
 ```
 
-For a fresh installation, leave that empty legacy workspace alone and create your company from the UI. See [workspace onboarding](../README.md#company-workspaces) for roles and invitations. Billing, company budgets, installation transfers and company deletion are not included in this release.
+For a fresh installation, leave that empty legacy workspace alone and create your company from the UI. See [workspace onboarding](getting-started.md#company-workspaces) for roles and invitations. Optional billing and company budgets are described in [billing](billing.md). Installation transfers and company deletion are not included in this release.

@@ -1,3 +1,4 @@
+import { modelConfig } from "@/lib/config";
 import { headers } from "next/headers";
 import { auth, requireWorkspace } from "@/lib/auth";
 import { canManage } from "@/lib/workspaces";
@@ -127,7 +128,7 @@ export default async function Settings({
         </p>
         <dl className="policy-list">
           <dt>Model</dt>
-          <dd>{process.env.NAN_MODEL || "Not configured"}</dd>
+          <dd>{modelConfig().model || "Not configured"}</dd>
           <dt>Changed files per run</dt>
           <dd>Up to 30</dd>
           <dt>Inline comments</dt>

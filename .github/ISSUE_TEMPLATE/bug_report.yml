@@ -1,0 +1,25 @@
+name: Bug report
+description: Report a reproducible problem
+title: "[Bug]: "
+body:
+  - type: markdown
+    attributes:
+      value: "For vulnerabilities, use private security reporting. Never include secrets or private source code."
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened?
+      description: Include expected behavior and steps to reproduce.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Codelean revision, deployment method, OS, Node version, and model/provider (no keys).
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Sanitized logs or screenshots

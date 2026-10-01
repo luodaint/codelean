@@ -1,3 +1,4 @@
+import { creemConfigured } from "./config";
 export const pricing = {
   monthlyCents: 1000,
   includedTokens: 20_000_000n,
@@ -8,13 +9,21 @@ export const pricing = {
   eventName: "codelean_overage_tokens",
 };
 
-// Public GitHub API verified 2026-09-30. Never authorize by mutable username.
-export const ownerGitHubId = "1257083";
+// Never authorize by mutable username. Unconfigured installations have no operator.
+export function ownerGitHubId() {
+  const id = process.env.OPERATOR_GITHUB_ID?.trim();
+  return id && /^[1-9][0-9]*$/.test(id) ? id : null;
+}
 export function isOperator(user: { githubId?: string | null }) {
-  return user.githubId === ownerGitHubId;
+  return Boolean(ownerGitHubId() && user.githubId === ownerGitHubId());
 }
 export function billingEnabled() {
-  return process.env.BILLING_ENABLED !== "false";
+  const mode = process.env.BILLING_ENABLED?.trim() || "auto";
+  if (mode === "false") return false;
+  if (mode === "true") return true; // Explicit paid deployments fail closed.
+  if (mode !== "auto")
+    throw new Error("BILLING_ENABLED must be auto, true or false");
+  return creemConfigured();
 }
 export class BillingBlocked extends Error {
   constructor(

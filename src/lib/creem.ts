@@ -2,15 +2,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { required } from "./config";
 import { pricing } from "./billing-policy";
 
-export function creemConfigured() {
-  return Boolean(
-    process.env.CREEM_API_KEY &&
-    process.env.CREEM_WEBHOOK_SECRET &&
-    process.env.CREEM_PLAN_PRODUCT_ID &&
-    process.env.CREEM_TOKEN_PRODUCT_ID &&
-    process.env.CREEM_METER_ID,
-  );
-}
+export { creemConfigured } from "./config";
 export async function creemRequest<T>(
   path: string,
   method = "GET",
