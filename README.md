@@ -1,6 +1,6 @@
 <p align="center"><img src="public/brand/codelean-mark.png" width="112" height="112" alt="Codelean logo"></p>
 
-# Codelean · codelean.dev
+# Codelean
 
 A self-hosted GitHub PR reviewer with a Next.js admin, PostgreSQL queue, Semgrep/Gitleaks static checks, and AI review through NaN. Designed for a small Dokploy installation on Hetzner.
 
@@ -23,8 +23,8 @@ Reviews are **advisory**: no auto-approval, requests for changes, merges, depend
 Requires Node.js 22+ with npm and a running Docker engine with Compose v2 (for example, Docker Desktop or OrbStack on macOS). Python 3 is only needed to run the scanner unit tests on the host. Clone the private repository with an authorized GitHub account, then run:
 
 ```sh
-git clone git@github.com:luodaint/codelean.dev.git
-cd codelean.dev
+git clone git@github.com:luodaint/codelean.git
+cd codelean
 npm ci
 npm run setup
 ```
@@ -46,6 +46,8 @@ npm run dev -- --hostname 127.0.0.1 --port 3100
 ```
 
 Open [localhost:3100](http://localhost:3100), enter any email, request a code, then enter any number. No mail is sent in this mode. Create a company workspace on the next screen. The bypass requires `next dev` and a loopback `APP_URL`; Docker production deployments force it off.
+
+`codelean-dev` is the development Compose project name; `-dev` identifies the environment. Production uses `codelean`, and images use the `codelean-` prefix. For an existing installation, keep its current Compose project name so Docker continues to use the same database volume; see [existing installations](docs/domain-setup.md#existing-installations).
 
 The development override publishes dependencies only on loopback and permits network egress for host access. Production uses internal networks; never deploy with `compose.dev.yml` on a server.
 

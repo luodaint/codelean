@@ -10,7 +10,7 @@ For a fresh Hetzner server, follow [server-bootstrap.txt](server-bootstrap.txt).
 
 ## 2. Prepare configuration
 
-Clone `git@github.com:luodaint/codelean.dev.git` with an authorized GitHub account, or use a reviewed source archive. No public container registry is assumed. See [domain setup](domain-setup.md) for Cloudflare and exact Codelean URLs. Use Node.js 22+:
+Clone `git@github.com:luodaint/codelean.git` with an authorized GitHub account, or use a reviewed source archive. No public container registry is assumed. See [domain setup](domain-setup.md) for Cloudflare and exact Codelean URLs. Use Node.js 22+:
 
 ```sh
 npm ci
