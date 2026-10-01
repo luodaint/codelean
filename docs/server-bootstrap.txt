@@ -4,7 +4,7 @@ Audience: Codex, Claude, or a human operator working on the target Linux server.
 
 PURPOSE AND CURRENT STATUS
 
-Repository: git@github.com:luodaint/codelean.dev.git (private; authorized access required).
+Repository: git@github.com:luodaint/codelean.git (private; authorized access required).
 Default production domain: codelean.dev; Cloudflare manages DNS.
 Domain and local tunnel guide: docs/domain-setup.md.
 

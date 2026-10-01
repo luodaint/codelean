@@ -1,6 +1,6 @@
 # Codelean domain and GitHub setup
 
-The product is **Codelean**, the repository is `luodaint/codelean.dev`, and the intended production origin is `https://codelean.dev`. Owning the domain does not deploy the app. Local development continues at `http://localhost:3100`.
+The product is **Codelean**, the repository is `luodaint/codelean`, and the intended production origin is `https://codelean.dev`. Owning the domain does not deploy the app. Local development continues at `http://localhost:3100`.
 
 ## Production on the existing Dokploy server
 
@@ -90,9 +90,9 @@ See Cloudflare's [tunnel creation guide](https://developers.cloudflare.com/tunne
 
 ## Existing installations
 
-Fresh installs use the Compose project, images, database and role named `codelean`. A rename must not silently switch an existing installation to an empty volume:
+Fresh production installs use the Compose project `codelean`; the local development commands use `codelean-dev`. Images use the `codelean-` prefix, and new databases and roles default to `codelean`. The development tunnel is also named `codelean-dev`; that is an environment label, independent of the GitHub repository name. A rename must not silently switch an existing installation to an empty volume:
 
-- Keep your previous Compose project name: substitute `-p luoda-pr-checker` (or `-p luoda-pr-checker-dev`) into the new documentation's commands if that was your original project. In Dokploy, preserve the service's existing project identity.
+- Keep your previous Compose project name: substitute your existing `-p codelean-dev`, `-p luoda-pr-checker`, or `-p luoda-pr-checker-dev` into the new documentation's commands if that was your original project. In Dokploy, preserve the service's existing project identity.
 - Set `POSTGRES_USER=luoda` and `POSTGRES_DB=luoda` for volumes initialized by the old Compose bundle. Use your actual existing values for manually created databases. Preserve `POSTGRES_PASSWORD` and the host-run `DATABASE_URL`. The configurable role/database defaults affect only new installs; they do not migrate an existing database.
 - Keep `BETTER_AUTH_SECRET` and provider credentials unchanged. Keep using the original checkout directory if an IDE, running process or deployment points to it; its folder name has no runtime effect.
 - Use the existing role/database and Compose project when running backup commands. Take a backup before a deployment update; never remove the volume as part of the rebrand.
