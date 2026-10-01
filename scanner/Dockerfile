@@ -1,5 +1,5 @@
 FROM ghcr.io/gitleaks/gitleaks:v8.30.1 AS gitleaks
-FROM python:3.12-slim-bookworm
+FROM python:3.14-slim-bookworm
 RUN pip install --no-cache-dir semgrep==1.178.0
 COPY --from=gitleaks /usr/bin/gitleaks /usr/local/bin/gitleaks
 RUN useradd --uid 10001 --create-home scanner
