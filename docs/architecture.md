@@ -7,7 +7,7 @@ Codelean supports multiple company workspaces using Better Auth organizations, m
 | Component   | Responsibility                                                         | Access                                                  |
 | ----------- | ---------------------------------------------------------------------- | ------------------------------------------------------- |
 | Next.js web | GitHub sign-in, workspaces, dashboard, repository management, webhooks | PostgreSQL, SMTP, GitHub App credentials                |
-| Node worker | Claim jobs, fetch bounded source, call scanners and NaN, publish       | PostgreSQL, GitHub App, NaN, scanner token              |
+| Node worker | Claim jobs, fetch bounded source, call scanners and an LLM, publish       | PostgreSQL, GitHub App, LLM provider, scanner token              |
 | Scanner     | Gitleaks and four initial Semgrep rules                                | Temporary files and scanner token only; private network |
 | PostgreSQL  | Durable queue, records and sessions                                    | Private backend network                                 |
 
@@ -23,7 +23,7 @@ Each validated model batch is saved as a PostgreSQL checkpoint scoped to its run
 4. Apply limits: 30 files, 100 KB per file, 500 KB total content plus patches. Deleted/binary/oversized/omitted files produce partial coverage. An empty snapshot fails rather than passing.
 5. Send snapshots to the private scanner. Gitleaks scans for secrets and redacts detected values from source and patches before any model call. Worker redaction adds common token/key patterns. Detection is best effort; enabling a repository authorizes sending its bounded, redacted code to the configured provider.
 6. Run pinned Semgrep with bundled rules: JavaScript eval, disabled JavaScript TLS verification, Python eval/exec, and Python subprocess shell use. Repository scanner configs and ignore files cannot weaken these commands. This is deliberately small rule coverage, not a comprehensive audit.
-7. Request structured review JSON from the configured NaN model. Repository text is untrusted input; the model has no tools or shell access. Validate fields, paths, added-line locations and quoted evidence, redact output, and deduplicate findings. Invalid output fails the run.
+7. Request structured review JSON from the configured chat model. Repository text is untrusted input; the model has no tools or shell access. Validate fields, paths, added-line locations and quoted evidence, redact output, and deduplicate findings. Invalid output fails the run.
 8. Recheck current revision and repository authorization before each publication stage. Update an advisory neutral check, one bot-owned summary comment, at most five inline AI comments, and optional `codelean:*` labels. Findings remain available in the dashboard.
 
 A push can still race with an individual GitHub API call; the checks and review are explicitly tied to a commit. No approval or merge decision is made. Summary comments identify the reviewed SHA. No promise of exactly-once delivery is made across external systems; stable markers, stored IDs and reconciliation reduce duplicates.
