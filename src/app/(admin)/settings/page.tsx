@@ -1,3 +1,4 @@
+import { modelConfig } from "@/lib/config";
 import { headers } from "next/headers";
 import { auth, requireWorkspace } from "@/lib/auth";
 import { canManage } from "@/lib/workspaces";
@@ -118,9 +119,16 @@ export default async function Settings({
         <p>
           Reviews are advisory. Automatic approvals and merges are disabled.
         </p>
+        <p>
+          Code review and the separate PR-focused security audit use the enabled
+          skills assigned to each phase in{" "}
+          <code>review-skills/skills.json</code>. Edit the Markdown files in{" "}
+          <code>review-skills/</code> to tune it. Each run records the skill
+          versions and security results it actually used.
+        </p>
         <dl className="policy-list">
           <dt>Model</dt>
-          <dd>{process.env.NAN_MODEL || "Not configured"}</dd>
+          <dd>{modelConfig().model || "Not configured"}</dd>
           <dt>Changed files per run</dt>
           <dd>Up to 30</dd>
           <dt>Inline comments</dt>

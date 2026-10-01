@@ -1,17 +1,19 @@
 # Architecture and boundaries
 
-Codelean supports multiple company workspaces using Better Auth organizations, memberships, invitations and active workspace sessions. PostgreSQL holds those records alongside repositories, delivery receipts, runs, results and worker heartbeats. The operator shares infrastructure and provider credentials across companies; billing and resource fairness are not yet implemented.
+Codelean supports multiple company workspaces using Better Auth organizations, memberships, invitations and active workspace sessions. PostgreSQL holds those records alongside repositories, delivery receipts, runs, results and worker heartbeats. The operator shares infrastructure and provider credentials across companies; Creem billing and usage limits are described in [Billing](billing.md). Workspaces share a single worker, which prefers the least recently served workspace.
 
 ## Components
 
 | Component   | Responsibility                                                         | Access                                                  |
 | ----------- | ---------------------------------------------------------------------- | ------------------------------------------------------- |
 | Next.js web | GitHub sign-in, workspaces, dashboard, repository management, webhooks | PostgreSQL, SMTP, GitHub App credentials                |
-| Node worker | Claim jobs, fetch bounded source, call scanners and NaN, publish       | PostgreSQL, GitHub App, NaN, scanner token              |
+| Node worker | Claim jobs, fetch bounded source, call scanners and an LLM, publish       | PostgreSQL, GitHub App, LLM provider, scanner token              |
 | Scanner     | Gitleaks and four initial Semgrep rules                                | Temporary files and scanner token only; private network |
 | PostgreSQL  | Durable queue, records and sessions                                    | Private backend network                                 |
 
 A single worker holds a PostgreSQL advisory session lock. Jobs are transactionally claimed with `FOR UPDATE SKIP LOCKED`. Losing the lock connection stops the worker. Duplicate webhook delivery IDs and revision uniqueness constraints prevent duplicate jobs. Automatic analysis retries stop after three attempts; once publication starts, an ambiguous failure requires an explicit retry that reconciles existing GitHub objects.
+
+Each validated model batch is saved as a PostgreSQL checkpoint scoped to its run, revisions and exact input/configuration fingerprint. Retrying or restarting the worker reuses those batches after current authorization checks; unfinished or incompatible batches execute again. Cache hits generate no new inference usage. See [resumable reviews](resumable-reviews.md).
 
 ## Review lifecycle
 
@@ -21,7 +23,7 @@ A single worker holds a PostgreSQL advisory session lock. Jobs are transactional
 4. Apply limits: 30 files, 100 KB per file, 500 KB total content plus patches. Deleted/binary/oversized/omitted files produce partial coverage. An empty snapshot fails rather than passing.
 5. Send snapshots to the private scanner. Gitleaks scans for secrets and redacts detected values from source and patches before any model call. Worker redaction adds common token/key patterns. Detection is best effort; enabling a repository authorizes sending its bounded, redacted code to the configured provider.
 6. Run pinned Semgrep with bundled rules: JavaScript eval, disabled JavaScript TLS verification, Python eval/exec, and Python subprocess shell use. Repository scanner configs and ignore files cannot weaken these commands. This is deliberately small rule coverage, not a comprehensive audit.
-7. Request structured review JSON from the configured NaN model. Repository text is untrusted input; the model has no tools or shell access. Validate fields, paths, added-line locations and quoted evidence, redact output, and deduplicate findings. Invalid output fails the run.
+7. Request structured review JSON from the configured chat model. Repository text is untrusted input; the model has no tools or shell access. Validate fields, paths, added-line locations and quoted evidence, redact output, and deduplicate findings. Invalid output fails the run.
 8. Recheck current revision and repository authorization before each publication stage. Update an advisory neutral check, one bot-owned summary comment, at most five inline AI comments, and optional `codelean:*` labels. Findings remain available in the dashboard.
 
 A push can still race with an individual GitHub API call; the checks and review are explicitly tied to a commit. No approval or merge decision is made. Summary comments identify the reviewed SHA. No promise of exactly-once delivery is made across external systems; stable markers, stored IDs and reconciliation reduce duplicates.
@@ -52,8 +54,8 @@ Migration 002 keeps pre-existing repositories in an Original workspace and assig
 
 ## Known first-release limits
 
-- Multiple workspaces share one active worker and a basic rule set. No billing, per-company spending caps or fair scheduling. No custom trusted policy UI, multi-model validation, approval policy, CI aggregation or repository test execution.
+- Multiple workspaces share one active worker and a basic rule set. No custom trusted policy UI, multi-model validation, approval policy, CI aggregation or repository test execution.
 - Source snapshots are temporary; result evidence can contain code fragments and should be treated as private repository data. No automated retention deletion yet.
-- Token usage is recorded when returned by the provider. Cost estimates and provider model discovery are not implemented; `NAN_MODEL` must be supplied by the operator.
+- Token usage is recorded when returned by the provider. Billable usage and provider capacity have separate ledgers. Provider model discovery is not implemented; `LLM_MODEL` (or legacy `NAN_MODEL`) must be supplied by the operator.
 - Worker and trusted publisher share a process/credentials in this version. Scanners are separated; model inference is a bounded HTTP call.
 - Images build from source; the version tags are local image names. A signed, digest-pinned release registry and multi-architecture CI publication remain release work.

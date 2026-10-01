@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { LogOut, ShieldCheck, ArrowUpRight } from "lucide-react";
 import { logout } from "@/app/actions";
+import { billingEnabled } from "@/lib/billing-policy";
 import { Navigation } from "./navigation";
 export function Brand() {
   return (
@@ -25,6 +26,7 @@ export function Shell({
   name,
   githubUsername,
   image,
+  operator = false,
 }: {
   children: React.ReactNode;
   workspace?: { name: string; role: string };
@@ -32,6 +34,7 @@ export function Shell({
   name?: string;
   githubUsername?: string | null;
   image?: string | null;
+  operator?: boolean;
 }) {
   return (
     <div className="app-shell">
@@ -51,7 +54,7 @@ export function Shell({
           </div>
           <span className="workspace-dot" />
         </Link>
-        <Navigation />
+        <Navigation operator={operator} billing={billingEnabled()} />
         <div className="sidebar-bottom">
           <div className="advisory">
             <ShieldCheck size={20} />
@@ -103,7 +106,7 @@ export function Shell({
         <main>{children}</main>
         <footer>
           Every review belongs to a specific commit.{" "}
-          <span>Powered by your models on NaN.</span>
+          <span>Powered by your configured AI provider.</span>
         </footer>
       </div>
     </div>

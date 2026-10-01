@@ -12,6 +12,17 @@ x-github: &github
   GITHUB_APP_SLUG: ${GITHUB_APP_SLUG:-}
   GITHUB_PRIVATE_KEY_BASE64: ${GITHUB_PRIVATE_KEY_BASE64:-}
   GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET:?Generate webhook secret}
+x-billing: &billing
+  BILLING_ENABLED: ${BILLING_ENABLED:-auto}
+  OPERATOR_GITHUB_ID: ${OPERATOR_GITHUB_ID:-}
+  CREEM_WEBHOOK_SECRET: ${CREEM_WEBHOOK_SECRET:-}
+  CREEM_TEST_MODE: ${CREEM_TEST_MODE:-true}
+  CREEM_API_KEY: ${CREEM_API_KEY:-}
+  CREEM_PLAN_PRODUCT_ID: ${CREEM_PLAN_PRODUCT_ID:-}
+  CREEM_TOKEN_PRODUCT_ID: ${CREEM_TOKEN_PRODUCT_ID:-}
+  CREEM_METER_ID: ${CREEM_METER_ID:-}
+  BILLING_PROVIDER_TOKEN_BUDGET: ${BILLING_PROVIDER_TOKEN_BUDGET:-3000000000}
+  BILLING_PROVIDER_PERIOD_START: ${BILLING_PROVIDER_PERIOD_START:-}
 services:
   postgres:
     image: postgres:17-alpine
@@ -47,7 +58,8 @@ services:
     image: codelean-web:0.1.0
     build: { context: ., target: web }
     environment:
-      <<: [*database, *auth, *github]
+      <<: [*database, *auth, *github, *billing]
+      CREEM_WEBHOOK_SECRET: ${CREEM_WEBHOOK_SECRET:-}
       GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
       GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
       SMTP_HOST: ${SMTP_HOST:-}
@@ -56,6 +68,7 @@ services:
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       EMAIL_FROM: ${EMAIL_FROM:-}
+      LLM_MODEL: ${LLM_MODEL:-}
       NAN_MODEL: ${NAN_MODEL:-}
     networks: [backend, default]
     depends_on:
@@ -83,11 +96,17 @@ services:
     image: codelean-worker:0.1.0
     build: { context: ., target: worker }
     environment:
-      <<: [*database, *github]
+      <<: [*database, *github, *billing]
       APP_URL: ${APP_URL}
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_FALLBACK_MODEL: ${LLM_FALLBACK_MODEL:-}
+      LLM_TOKEN_PARAMETER: ${LLM_TOKEN_PARAMETER:-max_tokens}
       NAN_BASE_URL: ${NAN_BASE_URL:-https://api.nan.builders/v1}
       NAN_API_KEY: ${NAN_API_KEY:-}
+      LLM_MODEL: ${LLM_MODEL:-}
       NAN_MODEL: ${NAN_MODEL:-}
+      NAN_FALLBACK_MODEL: ${NAN_FALLBACK_MODEL:-}
       SCANNER_URL: http://scanner:8080
       SCANNER_TOKEN: ${SCANNER_TOKEN:?Generate scanner token}
     networks: [backend, scans, default]

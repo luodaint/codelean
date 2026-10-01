@@ -3,6 +3,10 @@ import { db } from "./db";
 import { appUrl, limits, required } from "./config";
 import { getRepository, GitHub, installationClient, repoPath } from "./github";
 import { addedLines, findingSchema, modelReview } from "./review";
+import { withReviewBilling, saveReviewResult } from "./billing";
+import { withReviewCheckpoints } from "./review-checkpoints";
+import { securityAudit } from "./security-audit";
+import { ReviewOrchestrator } from "./review-orchestrator";
 import { redact, safePath } from "./security";
 import type {
   Finding,
@@ -263,6 +267,12 @@ export async function reportFailure(
 function summaryBody(run: Run, result: ReviewResult) {
   return (
     `<!-- codelean:summary -->\n## Codelean review\n\n${md(result.summary)}\n\n` +
+    (result.reviewSkills?.length
+      ? `Code review skills: ${result.reviewSkills.map((s) => md(s.name)).join(", ")}.\n\n`
+      : "") +
+    (result.securityAudit
+      ? `### PR security audit\n\n${md(result.securityAudit.summary)}\n\nStatus: **${result.securityAudit.status}**. Skills: ${result.securityAudit.skills.map((s) => md(s.name)).join(", ") || "none"}. ${result.securityAudit.retained} retained findings. Changed-file source review only; no runtime verification or repository-wide audit.\n\n`
+      : "") +
     `Reviewed commit \`${run.head_sha.slice(0, 12)}\` against \`${run.base_sha.slice(0, 12)}\`. ` +
     `${result.files} changed files analyzed. Coverage: **${result.coverage}**. This review is advisory.\n\n` +
     result.findings
@@ -337,7 +347,7 @@ export async function publish(
     summary.id,
   ]);
   const findings = result.findings
-    .filter((f) => f.source === "ai")
+    .filter((f) => f.source === "ai" || f.source === "security-audit")
     .slice(0, limits.comments);
   if (findings.length) {
     await current(run, gh, repo);
@@ -413,6 +423,11 @@ export async function publish(
   }
 }
 export async function processRun(run: Run) {
+  return withReviewCheckpoints(run, () =>
+    withReviewBilling(run, () => processRunInternal(run)),
+  );
+}
+async function processRunInternal(run: Run) {
   const repo = await getRepository(run.repository_id);
   if (!repo?.enabled || !repo.connected)
     throw new Superseded("Repository disabled");
@@ -436,15 +451,65 @@ export async function processRun(run: Run) {
     await stage(run, "Running static checks");
     const scanned = await scanFiles(source.files);
     await current(run, reader, repo);
-    await stage(run, "Reviewing with NaN");
-    const model = await modelReview(
-      scanned.files,
-      scanned.findings as Finding[],
+    const orchestrator = new ReviewOrchestrator((message) =>
+      stage(run, message),
     );
-    const warnings = [...scanned.warnings, ...model.warnings];
+    const checkCurrent = async () => {
+      await current(run, reader, repo);
+    };
+    const guard = async <T>(work: Promise<T>) => {
+      try {
+        return await work;
+      } catch (error) {
+        orchestrator.abort(error);
+        throw error;
+      }
+    };
+    let model: Awaited<ReturnType<typeof modelReview>>;
+    let security: Awaited<ReturnType<typeof securityAudit>>;
+    try {
+      const [reviewed, audited] = await Promise.allSettled([
+        guard(
+          modelReview(scanned.files, scanned.findings as Finding[], {
+            orchestrator,
+            beforeBatch: checkCurrent,
+          }),
+        ),
+        guard(
+          securityAudit(
+            scanned.files,
+            scanned.findings as Finding[],
+            checkCurrent,
+            checkCurrent,
+            orchestrator,
+          ),
+        ),
+      ]);
+      if (reviewed.status === "rejected" || audited.status === "rejected")
+        throw orchestrator.signal.reason;
+      model = reviewed.value;
+      security = audited.value;
+    } finally {
+      await orchestrator.close();
+    }
+    await current(run, reader, repo);
+    const warnings = [
+      ...scanned.warnings,
+      ...model.warnings,
+      ...security.warnings,
+    ];
     result = {
       summary: model.summary,
-      findings: [...scanned.findings, ...model.findings] as Finding[],
+      findings: [
+        ...scanned.findings,
+        ...model.findings,
+        ...security.findings,
+      ] as Finding[],
+      securityAudit: security.audit,
+      reviewSkills: model.skills,
+      reviewBatches: model.batches,
+      resumedBatches:
+        model.resumedBatches + (security.audit.resumedBatches || 0),
       files: source.files.length,
       skipped: source.skipped,
       coverage:
@@ -452,9 +517,17 @@ export async function processRun(run: Run) {
       scanners: scanned.scanners,
       warnings,
     };
-    await db().query(
-      "UPDATE runs SET result=$2, tokens=$3, model=$4 WHERE id=$1",
-      [run.id, JSON.stringify(result), model.tokens, model.model],
+    await saveReviewResult(
+      run,
+      result,
+      model.tokens + security.audit.tokens,
+      [
+        ...new Set(
+          [model.model, security.audit.model]
+            .filter(Boolean)
+            .flatMap((name) => name!.split(", ")),
+        ),
+      ].join(", "),
     );
   }
   await stage(run, "Publishing review");

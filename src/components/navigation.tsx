@@ -7,7 +7,13 @@ import {
   ChartNoAxesCombined,
   Settings2,
 } from "lucide-react";
-export function Navigation() {
+export function Navigation({
+  operator = false,
+  billing = false,
+}: {
+  operator?: boolean;
+  billing?: boolean;
+}) {
   const path = usePathname();
   return (
     <nav aria-label="Main navigation">
@@ -16,6 +22,12 @@ export function Navigation() {
         { href: "/repositories", name: "Repositories", Icon: FolderGit2 },
         { href: "/statistics", name: "Statistics", Icon: ChartNoAxesCombined },
         { href: "/settings", name: "Settings", Icon: Settings2 },
+        ...(billing
+          ? [{ href: "/billing", name: "Billing & usage", Icon: Settings2 }]
+          : []),
+        ...(operator
+          ? [{ href: "/super-admin", name: "Super admin", Icon: Settings2 }]
+          : []),
       ].map(({ href, name, Icon }) => (
         <Link
           key={href}

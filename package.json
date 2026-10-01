@@ -13,6 +13,8 @@
     "worker": "node --env-file-if-exists=.env --import tsx src/worker.ts",
     "webhook:proxy": "node --import tsx scripts/webhook-proxy.ts",
     "migrate": "node --env-file-if-exists=.env --import tsx scripts/migrate.ts",
+    "billing:setup": "node --env-file-if-exists=.env --import tsx scripts/billing-setup.ts",
+    "billing:reconcile": "node --env-file-if-exists=.env --import tsx scripts/billing-reconcile.ts",
     "setup": "node --import tsx scripts/setup.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
@@ -39,5 +41,10 @@
     "prettier": "3.9.9",
     "typescript": "^5.9.3",
     "vitest": "5.0.2"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/luodaint/codelean.git"
   }
 }
