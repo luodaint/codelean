@@ -33,7 +33,7 @@
     "zod": "^4.1.12"
   },
   "devDependencies": {
-    "@types/node": "^22.19.0",
+    "@types/node": "^26.6.3",
     "@types/nodemailer": "8.0.2",
     "@types/pg": "^8.15.6",
     "@types/react": "^19.2.0",
