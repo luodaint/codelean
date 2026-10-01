@@ -18,7 +18,7 @@ export async function createWorkspace(form: FormData) {
     headers: await headers(),
     body: { organizationId: organization!.id },
   });
-  redirect("/");
+  redirect("/dashboard");
 }
 export async function switchWorkspace(form: FormData) {
   await requireMutation();
@@ -31,7 +31,7 @@ export async function switchWorkspace(form: FormData) {
     headers: await headers(),
     body: { organizationId },
   });
-  redirect("/");
+  redirect("/dashboard");
 }
 export async function inviteMember(form: FormData) {
   await requireMutation();

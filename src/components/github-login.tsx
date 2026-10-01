@@ -12,7 +12,7 @@ export function GitHubLogin({ configured }: { configured: boolean }) {
     try {
       const result = await client.signIn.social({
         provider: "github",
-        callbackURL: "/",
+        callbackURL: "/dashboard",
         errorCallbackURL: "/login",
       });
       if (result.error) {

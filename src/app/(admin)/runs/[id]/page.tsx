@@ -31,7 +31,7 @@ export default async function RunPage({
               : "Billing access or a usage limit prevents this retry. Open Billing to check your workspace access and limits."}
         </p>
       )}
-      <Link className="back" href="/">
+      <Link className="back" href="/dashboard">
         <ArrowLeft size={15} /> All reviews
       </Link>
       <div className="page-heading">

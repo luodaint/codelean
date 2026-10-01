@@ -4,7 +4,6 @@ export const metadata: Metadata = {
   applicationName: "Codelean",
   title: "Codelean · PR Checker",
   description: "A considered second look at every pull request.",
-  robots: { index: false, follow: false },
 };
 export default function RootLayout({
   children,
