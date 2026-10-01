@@ -21,6 +21,22 @@ def valid_path(value):
             and pathlib.PurePosixPath(value).name not in (".semgrepignore", ".gitleaksignore"))
 
 
+def write_source(source, file_path, content):
+    if not valid_path(file_path):
+        raise ValueError("Invalid source path")
+    # Check the canonical destination at the filesystem boundary as well as the
+    # request validator. The separator prevents sibling-prefix escapes, and
+    # realpath resolves any existing symlink before mkdir/write/chmod.
+    source_dir = os.path.realpath(source)
+    destination = os.path.realpath(os.path.join(source_dir, file_path))
+    if not destination.startswith(source_dir + os.sep):
+        raise ValueError("Source path escapes the scan directory")
+    dest = pathlib.Path(destination)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text(content)
+    dest.chmod(0o444)
+
+
 def command(args, cwd, home):
     # The subprocess receives neither the service token nor inherited host secrets.
     env = {"PATH": os.environ.get("PATH", "/usr/local/bin:/usr/bin:/bin"), "HOME": str(home),
@@ -62,10 +78,7 @@ def scan(files):
         source = root / "source"
         source.mkdir()
         for file in files:
-            dest = source / file["path"]
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            dest.write_text(file["content"])
-            dest.chmod(0o444)
+            write_source(source, file["path"], file["content"])
         leaks = root / "leaks.json"
         command(["gitleaks", "dir", str(source), "--config", "/app/gitleaks.toml", "--report-format", "json",
                  "--report-path", str(leaks), "--no-banner", "--ignore-gitleaks-allow", "--max-target-megabytes", "1"], root, root)

@@ -14,6 +14,8 @@ Apply and verify these settings in GitHub; adding this document does not enforce
 - Enable dependency graph, Dependabot alerts/security updates, secret scanning and push protection where available. Enable private vulnerability reporting.
 - Keep deployment credentials out of repository Actions. If deployment automation is added, use protected environments with required human approval and narrowly scoped credentials.
 
+For `luodaint/codelean`, public visibility and the active `main` ruleset were verified on 2026-10-01. The ruleset has no bypass actors and also requires approval of the latest reviewable push. Actions require full-length commit SHA references, permit organization/GitHub actions, and require approval for all external contributors. Secret scanning (including generic patterns), push protection, private vulnerability reporting, dependency and malware alerts, and grouped security updates are enabled. CodeQL default setup scans JavaScript/TypeScript, Python, and GitHub Actions. These hosted settings do not transfer automatically to forks. Version-update scheduling, CODEOWNERS, and the security policy take effect on the default branch once the contribution containing them is merged.
+
 The CI workflow declares read-only permissions and does not persist checkout credentials. Review workflow, dependency, Dockerfile, and CODEOWNERS changes carefully. Approving a fork workflow executes contributor code; inspect it first.
 
 ## Before making a private repository public
